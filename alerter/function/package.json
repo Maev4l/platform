@@ -1,0 +1,11 @@
+{
+  "name": "alerting",
+  "version": "1.0.0",
+  "scripts": {
+    "deploy": "serverless deploy"
+  },
+  "devDependencies": {
+    "serverless": "3.30.1",
+    "serverless-go-plugin": "2.2.0"
+  }
+}
