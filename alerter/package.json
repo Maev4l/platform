@@ -1,0 +1,9 @@
+{
+  "name": "@platform/alerter",
+  "version": "1.0.0",
+  "scripts": {
+    "backend:build": "make -C function package && yarn infra:apply",
+    "infra:plan": "terraform -chdir=infrastructure plan",
+    "infra:apply": "terraform -chdir=infrastructure apply -auto-approve"
+  }
+}
