@@ -21,7 +21,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      application = "alexandria"
+      application = "platform-alerter"
       owner       = "terraform"
     }
   }
