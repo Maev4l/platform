@@ -7,13 +7,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Maev4l/platform/users-management/pkg/identifier"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/rs/zerolog/log"
-	"github.com/Maev4l/platform/users-management/pkg/identifier"
 )
 
 // Handler processes Cognito Lambda triggers with customizable hooks.
@@ -231,7 +231,6 @@ func (h *Handler) handlePostConfirmation(ctx context.Context, rawEvent map[strin
 func (h *Handler) baseAttributes(event *PostConfirmationEvent) []Attribute {
 	attrs := []Attribute{
 		{Name: "custom:Id", Value: identifier.NewId()},
-		{Name: "custom:Approved", Value: "false"},
 	}
 
 	// Set email if not already present (native users need it set from username)
