@@ -51,6 +51,30 @@ func DefaultGetNotification(ctx context.Context, event *PreSignUpEvent) (*Notifi
 	return nil, false
 }
 
+// =============================================================================
+// APP APPROVAL HOOKS
+// For per-app approval workflow (PostAuthentication + PreTokenGeneration)
+// =============================================================================
+
+// ShouldNotifyForAppFunc returns notification payload for unapproved app access.
+// Return (nil, false) to skip notification.
+// Return (payload, true) to send notification to admin.
+type ShouldNotifyForAppFunc func(ctx context.Context, event *PostAuthenticationEvent, appConfig *AppConfig) (*NotificationPayload, bool)
+
+// OnTokenDeniedFunc is called when token issuance is blocked for unapproved user.
+// Use for logging, metrics, or side effects.
+type OnTokenDeniedFunc func(ctx context.Context, event *PreTokenGenerationEvent, appConfig *AppConfig) error
+
+// DefaultShouldNotifyForApp returns no notification
+func DefaultShouldNotifyForApp(ctx context.Context, event *PostAuthenticationEvent, appConfig *AppConfig) (*NotificationPayload, bool) {
+	return nil, false
+}
+
+// DefaultOnTokenDenied does nothing
+func DefaultOnTokenDenied(ctx context.Context, event *PreTokenGenerationEvent, appConfig *AppConfig) error {
+	return nil
+}
+
 // validateEmailFormat checks if email has valid format
 func validateEmailFormat(email string) error {
 	_, err := mail.ParseAddress(email)

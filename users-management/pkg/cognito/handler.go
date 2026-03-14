@@ -46,6 +46,25 @@ type Handler struct {
 	// GetNotification returns whether to send a notification and the payload.
 	// Default: no notification.
 	GetNotification GetNotificationFunc
+
+	// =========================================================================
+	// APP APPROVAL WORKFLOW HOOKS
+	// For per-app approval (PostAuthentication + PreTokenGeneration triggers)
+	// =========================================================================
+
+	// AppClientConfig maps Cognito app client IDs to app metadata.
+	// Used to determine which approval group to check for each app.
+	AppClientConfig map[string]AppConfig
+
+	// ShouldNotifyForApp returns notification for unapproved app access.
+	// Default: no notification.
+	// Override to: send Slack/email alerts when user needs approval.
+	ShouldNotifyForApp ShouldNotifyForAppFunc
+
+	// OnTokenDenied is called when token issuance is blocked.
+	// Default: no-op.
+	// Override to: log denials, track metrics.
+	OnTokenDenied OnTokenDeniedFunc
 }
 
 // NewHandler creates a Handler with default hooks and AWS clients.
@@ -61,6 +80,11 @@ func NewHandler() *Handler {
 		GetCustomAttributes: DefaultGetCustomAttributes,
 		OnUserConfirmed:     DefaultOnUserConfirmed,
 		GetNotification:     DefaultGetNotification,
+
+		// App approval hooks
+		AppClientConfig:    make(map[string]AppConfig),
+		ShouldNotifyForApp: DefaultShouldNotifyForApp,
+		OnTokenDenied:      DefaultOnTokenDenied,
 	}
 }
 
@@ -80,6 +104,10 @@ func (h *Handler) Handle(ctx context.Context, rawEvent map[string]interface{}) (
 		return h.handlePreSignUp(ctx, rawEvent)
 	case strings.HasPrefix(triggerSource, "PostConfirmation"):
 		return h.handlePostConfirmation(ctx, rawEvent)
+	case strings.HasPrefix(triggerSource, "PostAuthentication"):
+		return h.handlePostAuthentication(ctx, rawEvent)
+	case strings.HasPrefix(triggerSource, "TokenGeneration"):
+		return h.handlePreTokenGeneration(ctx, rawEvent)
 	default:
 		log.Warn().Str("trigger", triggerSource).Msg("Unhandled trigger source")
 		return rawEvent, nil
@@ -427,4 +455,274 @@ func (h *Handler) sendNotification(payload *NotificationPayload) {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to publish to SNS topic")
 	}
+}
+
+// =============================================================================
+// POST-AUTHENTICATION HANDLING
+// Fires after successful auth - sends notification if user not approved for app
+// =============================================================================
+
+func (h *Handler) handlePostAuthentication(ctx context.Context, rawEvent map[string]interface{}) (interface{}, error) {
+	event := h.parsePostAuthenticationEvent(rawEvent)
+
+	log.Info().
+		Str("trigger", event.TriggerSource).
+		Str("username", event.UserName).
+		Str("clientId", event.CallerContext.ClientId).
+		Msg("PostAuthentication")
+
+	// Look up app config by client ID
+	appConfig, exists := h.AppClientConfig[event.CallerContext.ClientId]
+	if !exists {
+		// Unknown app client - allow through without approval check
+		log.Debug().Str("clientId", event.CallerContext.ClientId).Msg("Unknown app client, skipping approval check")
+		return rawEvent, nil
+	}
+
+	// Check if user already in pending_apps (avoid duplicate notifications)
+	pendingApps := event.UserAttributes["custom:PendingApps"]
+	if containsApp(pendingApps, appConfig.AppName) {
+		log.Info().
+			Str("app", appConfig.AppName).
+			Str("username", event.UserName).
+			Msg("User already in pending_apps, skipping notification")
+		return rawEvent, nil
+	}
+
+	// Check if user is in approved group
+	isApproved, err := h.checkUserInGroup(ctx, event.UserPoolID, event.UserName, appConfig.ApprovedGroup)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check group membership")
+		return rawEvent, nil // Don't block auth on error, just log it
+	}
+
+	if isApproved {
+		log.Info().
+			Str("app", appConfig.AppName).
+			Str("username", event.UserName).
+			Msg("User is approved for app")
+		return rawEvent, nil
+	}
+
+	// User not approved - add to pending_apps and notify
+	newPendingApps := appendApp(pendingApps, appConfig.AppName)
+	if err := h.updatePendingApps(ctx, event.UserPoolID, event.UserName, newPendingApps); err != nil {
+		log.Error().Err(err).Msg("Failed to update pending_apps")
+	}
+
+	// HOOK: Send notification for unapproved app access
+	if h.ShouldNotifyForApp != nil {
+		if payload, shouldSend := h.ShouldNotifyForApp(ctx, event, &appConfig); shouldSend && payload != nil {
+			h.sendNotification(payload)
+		}
+	}
+
+	return rawEvent, nil
+}
+
+// =============================================================================
+// PRE-TOKEN-GENERATION HANDLING
+// Fires before token issuance - blocks token if user not in approved group
+// =============================================================================
+
+func (h *Handler) handlePreTokenGeneration(ctx context.Context, rawEvent map[string]interface{}) (interface{}, error) {
+	event := h.parsePreTokenGenerationEvent(rawEvent)
+
+	log.Info().
+		Str("trigger", event.TriggerSource).
+		Str("username", event.UserName).
+		Str("clientId", event.CallerContext.ClientId).
+		Msg("PreTokenGeneration")
+
+	// Look up app config by client ID
+	appConfig, exists := h.AppClientConfig[event.CallerContext.ClientId]
+	if !exists {
+		// Unknown app client - allow through without approval check
+		log.Debug().Str("clientId", event.CallerContext.ClientId).Msg("Unknown app client, skipping approval check")
+		return rawEvent, nil
+	}
+
+	// Check if user is in approved group
+	isApproved, err := h.checkUserInGroup(ctx, event.UserPoolID, event.UserName, appConfig.ApprovedGroup)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check group membership")
+		// Fail closed - block token on error
+		return rawEvent, fmt.Errorf("access denied: unable to verify approval status")
+	}
+
+	// Check pending_apps for cleanup
+	pendingApps := event.UserAttributes["custom:PendingApps"]
+
+	if isApproved {
+		// User approved - clean up stale pending entry if exists
+		if containsApp(pendingApps, appConfig.AppName) {
+			newPendingApps := removeApp(pendingApps, appConfig.AppName)
+			if err := h.updatePendingApps(ctx, event.UserPoolID, event.UserName, newPendingApps); err != nil {
+				log.Error().Err(err).Msg("Failed to cleanup pending_apps")
+			} else {
+				log.Info().
+					Str("app", appConfig.AppName).
+					Str("username", event.UserName).
+					Msg("Cleaned up pending_apps after approval")
+			}
+		}
+		return rawEvent, nil
+	}
+
+	// User not approved - block token
+	log.Warn().
+		Str("app", appConfig.AppName).
+		Str("username", event.UserName).
+		Msg("Blocking token - user not approved")
+
+	// HOOK: Notify about blocked token
+	if h.OnTokenDenied != nil {
+		if err := h.OnTokenDenied(ctx, event, &appConfig); err != nil {
+			log.Error().Err(err).Msg("OnTokenDenied hook failed")
+		}
+	}
+
+	return rawEvent, fmt.Errorf("access denied: user not approved for %s", appConfig.AppName)
+}
+
+// =============================================================================
+// POST-AUTH / PRE-TOKEN HELPERS
+// =============================================================================
+
+func (h *Handler) parsePostAuthenticationEvent(rawEvent map[string]interface{}) *PostAuthenticationEvent {
+	event := &PostAuthenticationEvent{
+		RawEvent:       rawEvent,
+		UserAttributes: make(map[string]string),
+	}
+
+	event.TriggerSource, _ = rawEvent["triggerSource"].(string)
+	event.UserPoolID, _ = rawEvent["userPoolId"].(string)
+	event.UserName, _ = rawEvent["userName"].(string)
+
+	// Extract callerContext.clientId
+	if callerContext, ok := rawEvent["callerContext"].(map[string]interface{}); ok {
+		event.CallerContext.ClientId, _ = callerContext["clientId"].(string)
+	}
+
+	if request, ok := rawEvent["request"].(map[string]interface{}); ok {
+		if userAttrs, ok := request["userAttributes"].(map[string]interface{}); ok {
+			for k, v := range userAttrs {
+				if str, ok := v.(string); ok {
+					event.UserAttributes[k] = str
+				}
+			}
+		}
+	}
+
+	event.Email = event.UserAttributes["email"]
+	return event
+}
+
+func (h *Handler) parsePreTokenGenerationEvent(rawEvent map[string]interface{}) *PreTokenGenerationEvent {
+	event := &PreTokenGenerationEvent{
+		RawEvent:       rawEvent,
+		UserAttributes: make(map[string]string),
+	}
+
+	event.TriggerSource, _ = rawEvent["triggerSource"].(string)
+	event.UserPoolID, _ = rawEvent["userPoolId"].(string)
+	event.UserName, _ = rawEvent["userName"].(string)
+
+	// Extract callerContext.clientId
+	if callerContext, ok := rawEvent["callerContext"].(map[string]interface{}); ok {
+		event.CallerContext.ClientId, _ = callerContext["clientId"].(string)
+	}
+
+	if request, ok := rawEvent["request"].(map[string]interface{}); ok {
+		if userAttrs, ok := request["userAttributes"].(map[string]interface{}); ok {
+			for k, v := range userAttrs {
+				if str, ok := v.(string); ok {
+					event.UserAttributes[k] = str
+				}
+			}
+		}
+
+		// Extract groupConfiguration
+		if groupConfig, ok := request["groupConfiguration"].(map[string]interface{}); ok {
+			if groups, ok := groupConfig["groupsToOverride"].([]interface{}); ok {
+				for _, g := range groups {
+					if gs, ok := g.(string); ok {
+						event.GroupConfig.GroupsToOverride = append(event.GroupConfig.GroupsToOverride, gs)
+					}
+				}
+			}
+		}
+	}
+
+	return event
+}
+
+// checkUserInGroup checks if user is member of a Cognito group
+func (h *Handler) checkUserInGroup(ctx context.Context, userPoolID, username, groupName string) (bool, error) {
+	result, err := h.cognitoClient.AdminListGroupsForUser(ctx, &cognitoidentityprovider.AdminListGroupsForUserInput{
+		UserPoolId: aws.String(userPoolID),
+		Username:   aws.String(username),
+	})
+	if err != nil {
+		return false, err
+	}
+
+	for _, group := range result.Groups {
+		if group.GroupName != nil && *group.GroupName == groupName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// updatePendingApps updates the custom:PendingApps attribute
+func (h *Handler) updatePendingApps(ctx context.Context, userPoolID, username, pendingApps string) error {
+	_, err := h.cognitoClient.AdminUpdateUserAttributes(ctx, &cognitoidentityprovider.AdminUpdateUserAttributesInput{
+		UserPoolId: aws.String(userPoolID),
+		Username:   aws.String(username),
+		UserAttributes: []types.AttributeType{
+			{
+				Name:  aws.String("custom:PendingApps"),
+				Value: aws.String(pendingApps),
+			},
+		},
+	})
+	return err
+}
+
+// containsApp checks if app is in comma-separated list
+func containsApp(pendingApps, appName string) bool {
+	if pendingApps == "" {
+		return false
+	}
+	apps := strings.Split(pendingApps, ",")
+	for _, app := range apps {
+		if strings.TrimSpace(app) == appName {
+			return true
+		}
+	}
+	return false
+}
+
+// appendApp adds app to comma-separated list
+func appendApp(pendingApps, appName string) string {
+	if pendingApps == "" {
+		return appName
+	}
+	return pendingApps + "," + appName
+}
+
+// removeApp removes app from comma-separated list
+func removeApp(pendingApps, appName string) string {
+	if pendingApps == "" {
+		return ""
+	}
+	apps := strings.Split(pendingApps, ",")
+	result := make([]string, 0, len(apps))
+	for _, app := range apps {
+		if strings.TrimSpace(app) != appName {
+			result = append(result, strings.TrimSpace(app))
+		}
+	}
+	return strings.Join(result, ",")
 }
