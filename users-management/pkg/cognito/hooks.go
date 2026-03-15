@@ -23,9 +23,10 @@ type GetCustomAttributesFunc func(ctx context.Context, event *PostConfirmationEv
 type OnUserConfirmedFunc func(ctx context.Context, event *PostConfirmationEvent) error
 
 // GetNotificationFunc returns whether to send a notification and the payload.
+// appConfig is nil if the client ID is not in AppClientConfig.
 // Return (nil, false) to skip notification.
 // Return (payload, true) to send.
-type GetNotificationFunc func(ctx context.Context, event *PreSignUpEvent) (*NotificationPayload, bool)
+type GetNotificationFunc func(ctx context.Context, event *PreSignUpEvent, appConfig *AppConfig) (*NotificationPayload, bool)
 
 // =============================================================================
 // DEFAULT IMPLEMENTATIONS
@@ -47,7 +48,7 @@ func DefaultOnUserConfirmed(ctx context.Context, event *PostConfirmationEvent) e
 }
 
 // DefaultGetNotification returns no notification
-func DefaultGetNotification(ctx context.Context, event *PreSignUpEvent) (*NotificationPayload, bool) {
+func DefaultGetNotification(ctx context.Context, event *PreSignUpEvent, appConfig *AppConfig) (*NotificationPayload, bool) {
 	return nil, false
 }
 

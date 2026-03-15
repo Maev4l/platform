@@ -14,6 +14,7 @@ type PreSignUpEvent struct {
 	UserName       string
 	Email          string
 	TriggerSource  string // PreSignUp_SignUp | PreSignUp_ExternalProvider
+	CallerContext  CallerContext
 	UserAttributes map[string]string
 	// Raw event for passthrough to response
 	RawEvent map[string]interface{}

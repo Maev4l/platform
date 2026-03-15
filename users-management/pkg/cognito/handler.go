@@ -178,7 +178,12 @@ func (h *Handler) handlePreSignUp(ctx context.Context, rawEvent map[string]inter
 
 	// HOOK: Send notification for new users
 	if h.GetNotification != nil {
-		if payload, shouldSend := h.GetNotification(ctx, event); shouldSend && payload != nil {
+		// Look up app config by client ID (nil if unknown)
+		var appConfig *AppConfig
+		if cfg, exists := h.AppClientConfig[event.CallerContext.ClientId]; exists {
+			appConfig = &cfg
+		}
+		if payload, shouldSend := h.GetNotification(ctx, event, appConfig); shouldSend && payload != nil {
 			h.sendNotification(payload)
 		}
 	}
@@ -283,6 +288,11 @@ func (h *Handler) parsePreSignUpEvent(rawEvent map[string]interface{}) *PreSignU
 	event.TriggerSource, _ = rawEvent["triggerSource"].(string)
 	event.UserPoolID, _ = rawEvent["userPoolId"].(string)
 	event.UserName, _ = rawEvent["userName"].(string)
+
+	// Extract callerContext.clientId
+	if callerContext, ok := rawEvent["callerContext"].(map[string]interface{}); ok {
+		event.CallerContext.ClientId, _ = callerContext["clientId"].(string)
+	}
 
 	if request, ok := rawEvent["request"].(map[string]interface{}); ok {
 		if userAttrs, ok := request["userAttributes"].(map[string]interface{}); ok {
@@ -581,7 +591,7 @@ func (h *Handler) handlePreTokenGeneration(ctx context.Context, rawEvent map[str
 		}
 	}
 
-	return rawEvent, fmt.Errorf("access denied: user not approved for %s", appConfig.AppName)
+	return rawEvent, fmt.Errorf("User not approved for %s", appConfig.AppName)
 }
 
 // =============================================================================
