@@ -34,12 +34,13 @@ locals {
 data "aws_caller_identity" "current" {}
 
 module "alerter_function" {
-  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.4.1"
+  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.6.0"
   function_name = "platform-alerter"
   zip = {
     filename = "../function/dist/alerter.zip"
     runtime  = "provided.al2023"
     handler  = "bootstrap"
+    hash     = filebase64sha256("../function/bin/bootstrap")
   }
   architecture = "arm64"
 
@@ -54,7 +55,7 @@ module "alerter_function" {
 }
 
 module "sns_trigger" {
-  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-sns?ref=v1.4.1"
+  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-sns?ref=v1.6.0"
 
   function_name = module.alerter_function.function_name
   function_arn  = module.alerter_function.function_arn
