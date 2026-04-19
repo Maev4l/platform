@@ -139,6 +139,39 @@ resource "aws_cognito_user_group" "cardgames_score" {
   description  = "Approved users for Card Games Score"
 }
 
+# =============================================================================
+# Visual Resumes
+# =============================================================================
+
+resource "aws_cognito_user_pool_client" "visual_resumes" {
+  name         = "visual-resumes"
+  user_pool_id = aws_cognito_user_pool.idp.id
+
+  supported_identity_providers = ["COGNITO", "Google"]
+
+  callback_urls = [
+    "https://visual-resumes.isnan.eu/",
+    "http://localhost:5178/"
+  ]
+
+  logout_urls = [
+    "https://visual-resumes.isnan.eu/",
+    "http://localhost:5178/"
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  allowed_oauth_flows_user_pool_client = true
+
+  depends_on = [aws_cognito_identity_provider.google]
+}
+
+resource "aws_cognito_user_group" "visual_resumes" {
+  name         = "visual-resumes"
+  user_pool_id = aws_cognito_user_pool.idp.id
+  description  = "Approved users for visual-resumes"
+}
+
 # Store all app client IDs in single SSM parameter (breaks Terraform dependency cycle)
 # Map format: appName -> clientId
 resource "aws_ssm_parameter" "app_clients" {
@@ -146,5 +179,6 @@ resource "aws_ssm_parameter" "app_clients" {
   type = "String"
   value = jsonencode({
     "cardgames-score" = aws_cognito_user_pool_client.cardgames_score.id
+    "visual-resumes"  = aws_cognito_user_pool_client.visual_resumes.id
   })
 }

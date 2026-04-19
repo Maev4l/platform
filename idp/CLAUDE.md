@@ -36,6 +36,7 @@ Single Cognito User Pool managing authentication for multiple apps with per-app 
 | App              | Client          | Group           |
 | ---------------- | --------------- | --------------- |
 | Card Games Score | cardgames-score | cardgames-score |
+| Visual Resumes   | visual-resumes  | visual-resumes  |
 
 App client IDs stored in single SSM parameter: `platform.idp.app-clients` (JSON map: appName -> clientId)
 
