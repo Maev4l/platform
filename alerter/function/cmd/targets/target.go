@@ -1,10 +1,8 @@
 package targets
 
-import (
-	"isnan.eu/alerting/cmd/models"
-)
+import "github.com/Maev4l/platform/notifications"
 
 type Target interface {
 	GetName() string
-	SendAlert(alert *models.AlertMessage) error
+	SendAlert(alert *notifications.Message) error
 }

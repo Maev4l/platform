@@ -4,11 +4,11 @@ import (
 	"context"
 	"os"
 
+	"github.com/Maev4l/platform/notifications"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-	"isnan.eu/alerting/cmd/models"
 )
 
 // SSM parameter name containing the Slack token - read from env var
@@ -49,8 +49,8 @@ func (n slackNotifier) GetName() string {
 	return n.name
 }
 
-func (n slackNotifier) SendAlert(alert *models.AlertMessage) error {
-	content := string(alert.Content)
+func (n slackNotifier) SendAlert(alert *notifications.Message) error {
+	content := alert.Content
 	if content != "" {
 
 		attachment := slack.Attachment{

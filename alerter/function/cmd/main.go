@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/Maev4l/platform/notifications"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
-	"isnan.eu/alerting/cmd/models"
 	"isnan.eu/alerting/cmd/targets"
 )
 
@@ -18,7 +18,7 @@ func handler(ctx context.Context, snsEvent events.SNSEvent) {
 	for _, record := range snsEvent.Records {
 		snsRecord := record.SNS
 
-		message := &models.AlertMessage{}
+		message := &notifications.Message{}
 
 		err := json.Unmarshal([]byte(snsRecord.Message), message)
 		if err != nil {
