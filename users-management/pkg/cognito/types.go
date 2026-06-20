@@ -2,6 +2,8 @@
 // Derived Lambdas customize behavior by overriding hook functions.
 package cognito
 
+import "github.com/Maev4l/platform/notifications"
+
 // Attribute represents a Cognito user attribute to set
 type Attribute struct {
 	Name  string
@@ -39,13 +41,11 @@ type ExistingUser struct {
 	Providers []string // Google, Facebook, native, etc.
 }
 
-// NotificationPayload defines the structure for signup notifications
-type NotificationPayload struct {
-	Source            string `json:"source"`
-	SourceDescription string `json:"sourceDescription"`
-	Target            string `json:"target"`
-	Content           string `json:"content"`
-}
+// NotificationPayload is retained as a backward-compatible alias. The canonical
+// type now lives in the shared notifications module so producers and the alerter
+// consumer share one wire contract. Existing hooks returning *NotificationPayload
+// keep compiling unchanged.
+type NotificationPayload = notifications.Message
 
 // Identity represents a federated identity from Cognito
 type Identity struct {

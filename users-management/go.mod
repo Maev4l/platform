@@ -3,6 +3,7 @@ module github.com/Maev4l/platform/users-management
 go 1.25.0
 
 require (
+	github.com/Maev4l/platform/notifications v1.0.0
 	github.com/aws/aws-lambda-go v1.47.0
 	github.com/aws/aws-sdk-go-v2 v1.32.6
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
