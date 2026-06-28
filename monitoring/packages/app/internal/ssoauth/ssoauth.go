@@ -165,17 +165,18 @@ func deviceFlow(ctx context.Context, c Config) (cachedToken, error) {
 		switch {
 		case errors.As(err, &pending):
 			// User hasn't approved yet — wait the prescribed interval.
-			time.Sleep(interval)
+			// fall through to context-aware wait
 		case errors.As(err, &slow):
 			// Server asked us to back off — add 5 s per RFC 8628 §3.5.
 			interval += 5 * time.Second
-			time.Sleep(interval)
 		default:
 			return cachedToken{}, fmt.Errorf("create token: %w", err)
 		}
 
-		// Respect context cancellation even while sleeping.
-		if ctx.Err() != nil {
+		// Context-aware wait: respects context cancellation without blocking until timeout.
+		select {
+		case <-time.After(interval):
+		case <-ctx.Done():
 			return cachedToken{}, ctx.Err()
 		}
 	}
