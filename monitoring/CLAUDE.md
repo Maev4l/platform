@@ -39,10 +39,11 @@ are gitignored.
 ## GeoIP
 MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).
 **Auto-downloaded at startup** (default on) when missing or stale, using
-`GEOIP_ACCOUNT_ID` + `GEOIP_LICENSE_KEY` (basic auth; license-key-only permalink
-if no account id); a `tar.gz.sha256` sidecar avoids re-downloading when
-unchanged. Startup-only (no background refresh). Used only for the country
-drill-down — the world view uses `c-country`, so the app runs fine without it.
+`GEOIP_LICENSE_KEY` (the `download.maxmind.com` permalink authenticates by
+`license_key` query param — no account id / basic auth); a `tar.gz.sha256`
+sidecar avoids re-downloading when unchanged. Startup-only (no background
+refresh). Used only for the country drill-down — the world view uses
+`c-country`, so the app runs fine without it.
 
 ## Build / run (from monitoring/)
 - `make run` — **one command to run the app**: builds the SPA, embeds it, builds
