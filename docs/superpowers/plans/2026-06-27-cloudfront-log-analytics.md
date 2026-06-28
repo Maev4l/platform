@@ -240,10 +240,10 @@ BIN_DIR := bin
 build:
 	go build -ldflags="-s -w" -o $(BIN_DIR)/monitoring ./cmd
 
-# Dev: fixed port so Vite's /api proxy (127.0.0.1:8080) matches. The built
-# binary defaults to an auto-selected free port instead.
+# Dev: serves on 127.0.0.1:8080 (matches Vite's /api proxy). Task 9 adds the
+# --addr flag + auto-port to the binary and updates this target accordingly.
 run:
-	go run ./cmd --addr 127.0.0.1:8080
+	go run ./cmd
 
 test:
 	go test ./...
@@ -1583,6 +1583,7 @@ import (
 
 func main() {
 	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+	gin.SetMode(gin.ReleaseMode) // suppress Gin's debug banner so logs stay clean zerolog JSON
 
 	// Each flag defaults to its env var, so the binary works with either flags or env.
 	startURL := flag.String("sso-start-url", os.Getenv("MONITORING_SSO_START_URL"), "IAM Identity Center start URL")
@@ -1655,15 +1656,26 @@ func main() {
 }
 ```
 
-- [ ] **Step 2: Tidy + build + full test run**
+- [ ] **Step 2: Update the app Makefile `run` target for the new --addr flag**
+
+Now that `main.go` parses `--addr` (default auto-port), pin dev to 8080 so Vite's proxy matches. In `monitoring/packages/app/Makefile`, change the `run` target to:
+
+```makefile
+# Dev: fixed port so Vite's /api proxy (127.0.0.1:8080) matches. The built
+# binary (no --addr) auto-selects a free port instead.
+run:
+	go run ./cmd --addr 127.0.0.1:8080
+```
+
+- [ ] **Step 3: Tidy + build + full test run**
 
 Run: `cd monitoring/packages/app && go mod tidy && go build ./... && go test ./...`
 Expected: build OK; all tests PASS.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add monitoring/packages/app/cmd/main.go monitoring/packages/app/go.mod monitoring/packages/app/go.sum
+git add monitoring/packages/app/cmd/main.go monitoring/packages/app/Makefile monitoring/packages/app/go.mod monitoring/packages/app/go.sum
 git commit -m "feat(monitoring): wire SSO login → Athena → server → browser"
 ```
 
