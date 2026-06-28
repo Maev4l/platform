@@ -1,0 +1,3 @@
+bin/
+# Built SPA is copied in at build time; keep only the placeholder.
+internal/web/dist/assets/
