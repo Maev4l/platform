@@ -6,3 +6,6 @@ packages/infrastructure/.terraform/
 GeoLite2-City.mmdb
 GeoLite2-City.mmdb.sha256
 GeoLite2-City.mmdb.tmp
+
+# MaxMind geoipupdate config — contains AccountID + LicenseKey (secrets).
+GeoIP.conf
