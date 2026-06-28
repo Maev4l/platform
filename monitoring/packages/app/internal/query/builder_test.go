@@ -34,7 +34,7 @@ func TestAccessRejectsBadGroupBy(t *testing.T) {
 
 func TestGeoAllIPs(t *testing.T) {
 	sql, args := GeoAllIPs("t", "2026-06-01", "2026-06-27")
-	if !strings.Contains(sql, `"c-ip" AS ip`) || !strings.Contains(strings.ToLower(sql), "group by") {
+	if !strings.Contains(sql, `"c_ip" AS ip`) || !strings.Contains(strings.ToLower(sql), "group by") {
 		t.Fatalf("bad sql: %s", sql)
 	}
 	if !strings.Contains(sql, "BETWEEN 20260601 AND 20260627") {

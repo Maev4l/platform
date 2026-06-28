@@ -8,13 +8,15 @@ import (
 
 var ErrBadGroupBy = errors.New("invalid groupBy")
 
-// Physical Parquet column names (quoted). Centralised: fix here if a name
-// differs (Task 12 verification query confirms the real names).
+// Physical Parquet column names (quoted). The CloudFront v2 Parquet uses
+// UNDERSCORES (verified against a real file): date, time, c_ip, c_country, asn,
+// cs_method, cs_protocol, cs_Host, cs_uri_stem, cs_uri_query, sc_status,
+// x_edge_result_type, x_edge_location, cs_User_Agent.
 const (
 	colDate   = `"date"`
-	colIP     = `"c-ip"`
-	colStatus = `"sc-status"`
-	colURI    = `"cs-uri-stem"`
+	colIP     = `"c_ip"`
+	colStatus = `"sc_status"`
+	colURI    = `"cs_uri_stem"`
 )
 
 // partKey converts a validated YYYY-MM-DD date to the integer composite key

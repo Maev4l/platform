@@ -41,11 +41,11 @@ resource "aws_glue_catalog_table" "source" {
       type = "string"
     }
     columns {
-      name = "c-ip"
+      name = "c_ip"
       type = "string"
     }
     columns {
-      name = "c-country"
+      name = "c_country"
       type = "string"
     }
     columns {
@@ -53,39 +53,39 @@ resource "aws_glue_catalog_table" "source" {
       type = "string"
     }
     columns {
-      name = "cs-method"
+      name = "cs_method"
       type = "string"
     }
     columns {
-      name = "cs-protocol"
+      name = "cs_protocol"
       type = "string"
     }
     columns {
-      name = "cs-host"
+      name = "cs_host"
       type = "string"
     }
     columns {
-      name = "cs-uri-stem"
+      name = "cs_uri_stem"
       type = "string"
     }
     columns {
-      name = "cs-uri-query"
+      name = "cs_uri_query"
       type = "string"
     }
     columns {
-      name = "sc-status"
+      name = "sc_status"
       type = "string"
     }
     columns {
-      name = "x-edge-result-type"
+      name = "x_edge_result_type"
       type = "string"
     }
     columns {
-      name = "x-edge-location"
+      name = "x_edge_location"
       type = "string"
     }
     columns {
-      name = "cs-user-agent"
+      name = "cs_user_agent"
       type = "string"
     }
   }
