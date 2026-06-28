@@ -24,14 +24,15 @@ const (
 // safe integer literal — no injection vector.
 func partKey(d string) string { return strings.ReplaceAll(d, "-", "") }
 
-// partitionPredicate prunes scans to [from,to] using the integer-projected
-// year/month/day partition columns: (year*10000 + month*100 + day) compared
-// against the two integer keys. Bounds are inlined computed integers (not
-// positional params) — this avoids the varchar/integer ambiguity that bare
-// `?` date parameters hit, and works regardless of zero-padding because the
-// projection presents year/month/day as integers.
+// partitionPredicate prunes scans to [from,to] using the year/month/day
+// partition columns. The columns are varchar (Glue declares partition keys as
+// string; projection.type=integer only governs partition enumeration, not the
+// SQL type), so each is CAST to integer and combined into a YYYYMMDD key
+// compared against the two inlined integer bounds (computed from validated
+// dates — no positional params, no injection vector). CAST also normalises any
+// zero-padding ("06" -> 6).
 func partitionPredicate(from, to string) string {
-	return fmt.Sprintf(`("year" * 10000 + "month" * 100 + "day") BETWEEN %s AND %s`, partKey(from), partKey(to))
+	return fmt.Sprintf(`(CAST("year" AS integer) * 10000 + CAST("month" AS integer) * 100 + CAST("day" AS integer)) BETWEEN %s AND %s`, partKey(from), partKey(to))
 }
 
 func Access(table, from, to, groupBy string) (string, []string, error) {

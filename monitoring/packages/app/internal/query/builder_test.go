@@ -13,8 +13,8 @@ func TestAccessGroupByDay(t *testing.T) {
 	if !strings.Contains(sql, `"bl_site"`) || !strings.Contains(sql, "date_trunc('day'") {
 		t.Fatalf("bad sql: %s", sql)
 	}
-	// integer-composite partition pruning with inlined integer bounds
-	if !strings.Contains(sql, `"year" * 10000 + "month" * 100 + "day"`) {
+	// integer-composite partition pruning (varchar cols cast to int) + inlined bounds
+	if !strings.Contains(sql, `CAST("year" AS integer) * 10000`) {
 		t.Fatalf("missing composite partition key: %s", sql)
 	}
 	if !strings.Contains(sql, "BETWEEN 20260601 AND 20260627") {
