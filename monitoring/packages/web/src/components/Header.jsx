@@ -1,5 +1,9 @@
+import dayjs from 'dayjs';
 import { Select } from '@/components/ui/Select';
 import { ToggleGroup } from '@/components/ui/ToggleGroup';
+
+// Preset date ranges → number of days back from today (90 = log retention max).
+const RANGES = { 'Last 7 days': 7, 'Last 14 days': 14, 'Last 30 days': 30, 'Last 90 days': 90 };
 
 export const Header = ({ sources, state, setState }) => (
   <header className="flex h-[58px] items-center gap-6 border-b border-border px-5">
@@ -16,6 +20,20 @@ export const Header = ({ sources, state, setState }) => (
         onChange={(v) => setState((s) => ({ ...s, source: v, country: '' }))}
         options={sources}
         className="w-[230px]"
+      />
+      <Select
+        value={state.range}
+        onChange={(label) => {
+          const days = RANGES[label] ?? 14;
+          setState((s) => ({
+            ...s,
+            range: label,
+            from: dayjs().subtract(days, 'day').format('YYYY-MM-DD'),
+            to: dayjs().format('YYYY-MM-DD'),
+          }));
+        }}
+        options={Object.keys(RANGES)}
+        className="w-[150px]"
       />
       <ToggleGroup
         value={state.groupBy}

@@ -13,7 +13,7 @@ const twoWeeksAgo = dayjs().subtract(14, 'day').format('YYYY-MM-DD');
 
 export default function App() {
   const [sources, setSources] = useState([]);
-  const [state, setState] = useState({ source: '', from: twoWeeksAgo, to: today, groupBy: 'day', country: '' });
+  const [state, setState] = useState({ source: '', from: twoWeeksAgo, to: today, groupBy: 'day', country: '', range: 'Last 14 days' });
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {

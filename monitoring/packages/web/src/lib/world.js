@@ -1,13 +1,12 @@
 import * as echarts from 'echarts';
+import worldGeo from './world.geo.json';
 
 let registered = false;
-export const ensureWorld = async () => {
+// Synchronous now — GeoJSON is bundled by Vite, no network fetch needed.
+// Idempotent: second call is a no-op once the map is registered.
+export const ensureWorld = () => {
   if (registered) return;
-  // registered stays false until registerMap succeeds — a failed fetch leaves it false
-  // so the caller can retry on the next mount, and the thrown error propagates to the
-  // caller's .catch (added in GeoMap) for clean error reporting.
-  const res = await fetch('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json');
-  echarts.registerMap('world', await res.json());
+  echarts.registerMap('world', worldGeo);
   registered = true;
 };
 

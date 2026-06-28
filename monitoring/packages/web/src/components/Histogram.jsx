@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react';
+import dayjs from 'dayjs';
 import * as echarts from 'echarts';
 import { api } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
+
+// Athena returns date_trunc timestamps like "2026-06-01 00:00:00.000";
+// render a short readable label, falling back to the raw value if unparseable.
+const fmtBucket = (t) => (dayjs(t).isValid() ? dayjs(t).format('MMM D') : t);
 
 const COLORS = { s2: '#c8f135', s3: '#5b9bff', s4: '#ffb020', s5: '#ff5a5a' };
 
@@ -25,7 +30,7 @@ export const Histogram = ({ state }) => {
         if (!d?.buckets) return;
         // Guard against a disposed chart if the component unmounted while the request was in-flight
         if (!chart.current || chart.current.isDisposed()) return;
-        const x = d.buckets.map((b) => b.t);
+        const x = d.buckets.map((b) => fmtBucket(b.t));
         const series = ['s2', 's3', 's4', 's5'].map((k) => ({ name: k, type: 'bar', stack: 't', barWidth: '58%', data: d.buckets.map((b) => b[k]), itemStyle: { color: COLORS[k] } }));
         chart.current.setOption({
           tooltip: { trigger: 'axis', backgroundColor: '#0c0e12', borderColor: '#1c2129', textStyle: { color: '#e7ebef', fontFamily: '"IBM Plex Mono", monospace', fontSize: 11 } },
