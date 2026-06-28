@@ -53,7 +53,7 @@ func TestUpdateDownloadsThenDetectsUpToDate(t *testing.T) {
 
 	dbPath := filepath.Join(t.TempDir(), "GeoLite2-City.mmdb")
 
-	changed, err := Update(context.Background(), "", "k", dbPath)
+	changed, err := Update(context.Background(), "k", dbPath)
 	if err != nil || !changed {
 		t.Fatalf("first update: changed=%v err=%v", changed, err)
 	}
@@ -64,7 +64,7 @@ func TestUpdateDownloadsThenDetectsUpToDate(t *testing.T) {
 		t.Fatalf("sidecar not written")
 	}
 
-	changed, err = Update(context.Background(), "", "k", dbPath)
+	changed, err = Update(context.Background(), "k", dbPath)
 	if err != nil || changed {
 		t.Fatalf("second update should be a no-op: changed=%v err=%v", changed, err)
 	}

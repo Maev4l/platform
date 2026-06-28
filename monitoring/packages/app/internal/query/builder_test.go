@@ -10,11 +10,19 @@ func TestAccessGroupByDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, `"bl_site"`) || !strings.Contains(sql, "BETWEEN ? AND ?") || !strings.Contains(sql, "date_trunc('day'") {
+	if !strings.Contains(sql, `"bl_site"`) || !strings.Contains(sql, "date_trunc('day'") {
 		t.Fatalf("bad sql: %s", sql)
 	}
-	if len(args) != 2 || args[0] != "2026-06-01" || args[1] != "2026-06-27" {
-		t.Fatalf("bad args: %v", args)
+	// integer-composite partition pruning with inlined integer bounds
+	if !strings.Contains(sql, `"year" * 10000 + "month" * 100 + "day"`) {
+		t.Fatalf("missing composite partition key: %s", sql)
+	}
+	if !strings.Contains(sql, "BETWEEN 20260601 AND 20260627") {
+		t.Fatalf("missing inlined integer bounds: %s", sql)
+	}
+	// dates are inlined into the predicate, so there are no positional args
+	if len(args) != 0 {
+		t.Fatalf("expected no args, got %v", args)
 	}
 }
 
@@ -26,23 +34,33 @@ func TestAccessRejectsBadGroupBy(t *testing.T) {
 
 func TestGeoCountries(t *testing.T) {
 	sql, args := GeoCountries("t", "2026-06-01", "2026-06-27")
-	if !strings.Contains(sql, `"c-country"`) || !strings.Contains(strings.ToLower(sql), "group by") || len(args) != 2 {
-		t.Fatalf("bad: %s %v", sql, args)
+	if !strings.Contains(sql, `"c-country"`) || !strings.Contains(strings.ToLower(sql), "group by") {
+		t.Fatalf("bad sql: %s", sql)
+	}
+	if !strings.Contains(sql, "BETWEEN 20260601 AND 20260627") {
+		t.Fatalf("missing partition bounds: %s", sql)
+	}
+	if len(args) != 0 {
+		t.Fatalf("expected no args, got %v", args)
 	}
 }
 
 func TestGeoIPsFiltersCountry(t *testing.T) {
 	sql, args := GeoIPs("t", "2026-06-01", "2026-06-27", "FR")
-	if !strings.Contains(sql, `"c-country" = ?`) || !strings.Contains(sql, `"c-ip"`) || len(args) != 3 || args[2] != "FR" {
-		t.Fatalf("bad: %s %v", sql, args)
+	if !strings.Contains(sql, `"c-country" = ?`) || !strings.Contains(sql, `"c-ip"`) {
+		t.Fatalf("bad sql: %s", sql)
+	}
+	// only the country is a positional arg now (dates are inlined)
+	if len(args) != 1 || args[0] != "FR" {
+		t.Fatalf("bad args: %v", args)
 	}
 }
 
 func TestSummaryAndTopURIs(t *testing.T) {
-	if sql, args := Summary("t", "2026-06-01", "2026-06-27"); !strings.Contains(sql, "count(") || len(args) != 2 {
-		t.Fatalf("bad summary: %s %v", sql, args)
+	if sql, args := Summary("t", "2026-06-01", "2026-06-27"); !strings.Contains(sql, "count(") || len(args) != 0 {
+		t.Fatalf("bad summary: %s args=%v", sql, args)
 	}
-	if sql, args := TopURIs("t", "2026-06-01", "2026-06-27", 8); !strings.Contains(sql, "LIMIT 8") || len(args) != 2 {
-		t.Fatalf("bad topuris: %s %v", sql, args)
+	if sql, args := TopURIs("t", "2026-06-01", "2026-06-27", 8); !strings.Contains(sql, "LIMIT 8") || len(args) != 0 {
+		t.Fatalf("bad topuris: %s args=%v", sql, args)
 	}
 }

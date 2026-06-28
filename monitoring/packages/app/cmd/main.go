@@ -100,7 +100,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	// When credentials are absent or the download fails the binary keeps running
 	// with an empty resolver; the world view still works off c-country.
 	if cfg.GeoIPAutoUpdate && cfg.GeoIPLicenseKey != "" {
-		if _, err := geo.Update(ctx, cfg.GeoIPAccountID, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
+		if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
 			log.Warn().Err(err).Msg("geoip update failed; using existing DB if present")
 		}
 	}

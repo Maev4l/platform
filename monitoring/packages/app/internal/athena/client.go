@@ -3,6 +3,7 @@ package athena
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -39,8 +40,14 @@ func New(api AthenaAPI, database, workgroup string) *Client {
 // completion using exponential backoff, and returns rows as []map[string]string keyed
 // by column name. The first result row (header) is consumed internally and not returned.
 func (c *Client) Query(ctx context.Context, sql string, args []string) ([]map[string]string, error) {
-	// Copy args so the caller's slice is never mutated.
-	params := append([]string(nil), args...)
+	// Athena substitutes ExecutionParameters into the `?` placeholders literally,
+	// so string values must be passed as quoted SQL string literals (a bare
+	// 2026-06-14 would be read as integer arithmetic, and FR as an identifier).
+	// All our positional args are strings, so quote each (escaping embedded ').
+	params := make([]string, len(args))
+	for i, a := range args {
+		params[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+	}
 	start, err := c.api.StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
 		QueryString:           aws.String(sql),
 		WorkGroup:             aws.String(c.workgroup),

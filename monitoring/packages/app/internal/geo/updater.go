@@ -21,20 +21,15 @@ const editionID = "GeoLite2-City"
 // baseURL is a var so tests can point it at an httptest server.
 var baseURL = "https://download.maxmind.com/app/geoip_download"
 
-// httpGet fetches one download "suffix". With an account id it uses HTTP basic
-// auth (MaxMind's current method); without one it falls back to the legacy
-// license-key permalink.
-func httpGet(ctx context.Context, accountID, licenseKey, suffix string) ([]byte, error) {
-	u := fmt.Sprintf("%s?edition_id=%s&suffix=%s", baseURL, editionID, suffix)
-	if accountID == "" {
-		u += "&license_key=" + licenseKey
-	}
+// httpGet fetches one download "suffix" from the MaxMind permalink. This
+// endpoint (download.maxmind.com/app/geoip_download) authenticates ONLY via the
+// `license_key` query parameter — it does not accept HTTP basic auth, so the
+// account id is not used here (basic auth against it returns 401).
+func httpGet(ctx context.Context, licenseKey, suffix string) ([]byte, error) {
+	u := fmt.Sprintf("%s?edition_id=%s&license_key=%s&suffix=%s", baseURL, editionID, licenseKey, suffix)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
-	}
-	if accountID != "" {
-		req.SetBasicAuth(accountID, licenseKey)
 	}
 	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
 	if err != nil {
@@ -49,8 +44,8 @@ func httpGet(ctx context.Context, accountID, licenseKey, suffix string) ([]byte,
 
 // remoteSHA returns the published sha256 of the current tar.gz (first token of
 // the ".sha256" body, which is "<hex>  <filename>").
-func remoteSHA(ctx context.Context, accountID, licenseKey string) (string, error) {
-	b, err := httpGet(ctx, accountID, licenseKey, "tar.gz.sha256")
+func remoteSHA(ctx context.Context, licenseKey string) (string, error) {
+	b, err := httpGet(ctx, licenseKey, "tar.gz.sha256")
 	if err != nil {
 		return "", err
 	}
@@ -64,8 +59,8 @@ func remoteSHA(ctx context.Context, accountID, licenseKey string) (string, error
 // Update downloads + extracts GeoLite2-City to dbPath when the local DB is
 // missing or the remote tar.gz.sha256 differs from the <dbPath>.sha256 sidecar.
 // Returns changed=true when it wrote a new DB.
-func Update(ctx context.Context, accountID, licenseKey, dbPath string) (bool, error) {
-	remote, err := remoteSHA(ctx, accountID, licenseKey)
+func Update(ctx context.Context, licenseKey, dbPath string) (bool, error) {
+	remote, err := remoteSHA(ctx, licenseKey)
 	if err != nil {
 		return false, fmt.Errorf("remote sha: %w", err)
 	}
@@ -76,7 +71,7 @@ func Update(ctx context.Context, accountID, licenseKey, dbPath string) (bool, er
 		}
 	}
 
-	gz, err := httpGet(ctx, accountID, licenseKey, "tar.gz")
+	gz, err := httpGet(ctx, licenseKey, "tar.gz")
 	if err != nil {
 		return false, fmt.Errorf("download: %w", err)
 	}

@@ -19,7 +19,6 @@ type Config struct {
 	Database        string
 	Workgroup       string
 	GeoIPPath       string
-	GeoIPAccountID  string
 	GeoIPLicenseKey string
 	GeoIPAutoUpdate bool
 	Sources         map[string]Source
@@ -32,7 +31,6 @@ var envMap = map[string]string{
 	"ATHENA_DATABASE":   "database",
 	"ATHENA_WORKGROUP":  "workgroup",
 	"GEOIP_DB_PATH":     "geoip_path",
-	"GEOIP_ACCOUNT_ID":  "geoip_account_id",
 	"GEOIP_LICENSE_KEY": "geoip_license_key",
 	"GEOIP_AUTO_UPDATE": "geoip_auto_update",
 	"LOG_SOURCES":       "log_sources",
@@ -65,7 +63,6 @@ func Load() (*Config, error) {
 		Database:        k.String("database"),
 		Workgroup:       k.String("workgroup"),
 		GeoIPPath:       k.String("geoip_path"),
-		GeoIPAccountID:  k.String("geoip_account_id"),
 		GeoIPLicenseKey: k.String("geoip_license_key"),
 		GeoIPAutoUpdate: k.Bool("geoip_auto_update"),
 		Sources:         map[string]Source{},
