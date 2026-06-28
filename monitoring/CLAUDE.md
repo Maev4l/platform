@@ -42,9 +42,12 @@ MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).
 `GEOIP_LICENSE_KEY` (the `download.maxmind.com` permalink authenticates by
 `license_key` query param — no account id / basic auth); a `tar.gz.sha256`
 sidecar avoids re-downloading when unchanged. Startup-only (no background
-refresh). `c-country` is unpopulated in these logs, so BOTH the world map and
-the country drill-down geolocate `c-ip` via MaxMind — the map needs the DB
-loaded (`GEOIP_LICENSE_KEY`); without it the map is empty (KPIs/histogram still work).
+refresh). Geo resolution is hybrid: the world map and country drill-down use
+the `c_country` field first, falling back to MaxMind geolocation of `c_ip` when
+`c_country` is empty. MaxMind is also always used to place city-level dots in
+the drill-down, so the DB must be loaded (`GEOIP_LICENSE_KEY`) for dots to
+appear; without it the country-level map can still render from `c_country`
+(KPIs/histogram always work).
 
 ## Build / run (from monitoring/)
 - `make run` — **one command to run the app**: builds the SPA, embeds it, builds
