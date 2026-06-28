@@ -44,9 +44,14 @@ func (c *Client) Query(ctx context.Context, sql string, args []string) ([]map[st
 	// so string values must be passed as quoted SQL string literals (a bare
 	// 2026-06-14 would be read as integer arithmetic, and FR as an identifier).
 	// All our positional args are strings, so quote each (escaping embedded ').
-	params := make([]string, len(args))
-	for i, a := range args {
-		params[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+	// Leave params nil when there are no args: Athena rejects an empty (but
+	// present) ExecutionParameters list ("length >= 1"); nil omits it entirely.
+	var params []string
+	if len(args) > 0 {
+		params = make([]string, len(args))
+		for i, a := range args {
+			params[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+		}
 	}
 	start, err := c.api.StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
 		QueryString:           aws.String(sql),
