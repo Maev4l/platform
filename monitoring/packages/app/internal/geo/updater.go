@@ -29,7 +29,10 @@ func httpGet(ctx context.Context, accountID, licenseKey, suffix string) ([]byte,
 	if accountID == "" {
 		u += "&license_key=" + licenseKey
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
 	if accountID != "" {
 		req.SetBasicAuth(accountID, licenseKey)
 	}
@@ -90,6 +93,7 @@ func Update(ctx context.Context, accountID, licenseKey, dbPath string) (bool, er
 		return false, err
 	}
 	tmp := dbPath + ".tmp"
+	defer os.Remove(tmp) // no-op after a successful rename; cleans up on any error path
 	if err := os.WriteFile(tmp, mmdb, 0o644); err != nil {
 		return false, err
 	}
