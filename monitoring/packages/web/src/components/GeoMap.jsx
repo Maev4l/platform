@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from '@/lib/echarts';
 import { api } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';

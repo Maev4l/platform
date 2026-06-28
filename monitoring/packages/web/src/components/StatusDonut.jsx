@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from '@/lib/echarts';
 import { Card } from '@/components/ui/Card';
 
 export const StatusDonut = ({ summary }) => {
