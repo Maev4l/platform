@@ -378,9 +378,11 @@ Add the config library (koanf v2 + the confmap and env providers):
 
 ```bash
 go get github.com/knadh/koanf/v2@v2.1.2
-go get github.com/knadh/koanf/providers/confmap@v0.1.0
-go get github.com/knadh/koanf/providers/env@v0.1.0
+go get github.com/knadh/koanf/providers/confmap@v1.0.0
+go get github.com/knadh/koanf/providers/env@v1.1.0
 ```
+
+(koanf split its providers into separate modules; the `v1.x` provider tags are the ones compatible with koanf `v2` — older `v0.1.0` tags cause an "ambiguous import" error.)
 
 ```go
 package config
@@ -1590,8 +1592,10 @@ git commit -m "feat(monitoring): native SSO OIDC device-flow auth"
 
 ```bash
 go get github.com/spf13/cobra@v1.8.1
-go get github.com/knadh/koanf/providers/posflag@v0.1.0
+go get github.com/knadh/koanf/providers/posflag@v1.0.0
 ```
+
+(Use the `v1.x` posflag tag — like the other koanf v2 providers — to avoid the "ambiguous import" conflict. Bump to the nearest working tag if v1.0.0 is unavailable, and note it.)
 
 ```go
 package main
