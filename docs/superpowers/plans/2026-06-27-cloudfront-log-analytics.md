@@ -2178,8 +2178,10 @@ export const ToggleGroup = ({ value, onChange, items }) => (
 - [ ] **Step 6: jsconfig.json**
 
 ```json
-{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"] } } }
+{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }
 ```
+
+(No `baseUrl` — deprecated in TS 7.0; modern TS resolves the relative `paths` without it. The runtime `@` alias is handled by Vite's `resolve.alias`; this file is editor-only.)
 
 - [ ] **Step 7: oxlint (the linter for this app)**
 
