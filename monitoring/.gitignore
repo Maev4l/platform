@@ -1,3 +1,8 @@
 packages/web/node_modules/
 packages/web/dist/
 packages/infrastructure/.terraform/
+
+# MaxMind GeoLite2 DB (auto-downloaded at runtime; large + licensed — never commit).
+GeoLite2-City.mmdb
+GeoLite2-City.mmdb.sha256
+GeoLite2-City.mmdb.tmp

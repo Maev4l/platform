@@ -1,3 +1,8 @@
 bin/
 # Built SPA is copied in at build time; keep only the placeholder.
 internal/web/dist/assets/
+
+# Auto-downloaded MaxMind GeoLite2 DB (default GEOIP_DB_PATH is ./ = process CWD).
+GeoLite2-City.mmdb
+GeoLite2-City.mmdb.sha256
+GeoLite2-City.mmdb.tmp

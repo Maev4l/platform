@@ -2712,6 +2712,393 @@ git commit -m "docs(monitoring): app CLAUDE.md"
 
 ---
 
+## Task 19: GeoIP auto-update (download + scheduled refresh + hot reload)
+
+**Goal:** The binary manages the MaxMind GeoLite2-City DB itself — downloads it on first run if missing, refreshes it on a 24h schedule, and hot-swaps the in-memory reader. No external `geoipupdate` tool. Auto-update is **on by default**; the DB lives at `GEOIP_DB_PATH` (default `./GeoLite2-City.mmdb`, i.e. the process working directory).
+
+**Files:**
+- Modify: `monitoring/packages/app/internal/config/config.go` (+ `_test.go`)
+- Modify: `monitoring/packages/app/internal/geo/resolver.go` (+ `_test.go`)
+- Create: `monitoring/packages/app/internal/geo/updater.go` (+ `updater_test.go`)
+- Modify: `monitoring/packages/app/cmd/main.go`
+- Modify: `monitoring/packages/app/.gitignore`
+
+**Interfaces produced:**
+- config: `Config.GeoIPLicenseKey string`, `Config.GeoIPAutoUpdate bool` (env `GEOIP_LICENSE_KEY`, `GEOIP_AUTO_UPDATE` default `true`).
+- geo: `func New() *MMDB` (empty/no-op until reloaded); `func (m *MMDB) Reload(path string) error` (opens a new reader, swaps under `sync.RWMutex`, closes the old); `Lookup` returns `false` when no DB is loaded. `Open` retained.
+- geo: `func Update(ctx context.Context, licenseKey, dbPath string) (changed bool, err error)` — downloads+extracts GeoLite2-City to `dbPath` if missing or the remote `tar.gz.sha256` differs from the `<dbPath>.sha256` sidecar; writes the sidecar on success; returns `changed`.
+
+- [ ] **Step 1: config — add the two keys (TDD)**
+
+Add to `envMap`: `"GEOIP_LICENSE_KEY": "geoip_license_key"`, `"GEOIP_AUTO_UPDATE": "geoip_auto_update"`. Add to the confmap defaults: `"geoip_auto_update": true`. Add struct fields `GeoIPLicenseKey string`, `GeoIPAutoUpdate bool` and load them: `GeoIPLicenseKey: k.String("geoip_license_key")`, `GeoIPAutoUpdate: k.Bool("geoip_auto_update")`. Extend `config_test.go`: assert `GeoIPAutoUpdate == true` by default, and that `GEOIP_AUTO_UPDATE=false` (env) yields `false`.
+
+- [ ] **Step 2: geo resolver — make it reloadable + nil-safe (TDD)**
+
+Replace `resolver.go`'s `MMDB` with a mutex-guarded, reloadable reader:
+
+```go
+package geo
+
+import (
+	"net"
+	"sync"
+
+	"github.com/oschwald/geoip2-golang"
+)
+
+type Location struct {
+	City    string  `json:"city"`
+	Country string  `json:"country"`
+	Lat     float64 `json:"lat"`
+	Lng     float64 `json:"lng"`
+}
+
+type Resolver interface {
+	Lookup(ip string) (Location, bool)
+}
+
+// MMDB is a hot-reloadable MaxMind reader. A zero/New() instance has no DB and
+// returns false from Lookup until Reload succeeds.
+type MMDB struct {
+	mu sync.RWMutex
+	db *geoip2.Reader
+}
+
+// New returns an MMDB with no database loaded yet (Lookup returns false).
+func New() *MMDB { return &MMDB{} }
+
+// Open returns an MMDB with the database at path already loaded.
+func Open(path string) (*MMDB, error) {
+	m := &MMDB{}
+	if err := m.Reload(path); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// Reload opens the DB at path and atomically swaps it in, closing the old one.
+func (m *MMDB) Reload(path string) error {
+	r, err := geoip2.Open(path)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	old := m.db
+	m.db = r
+	m.mu.Unlock()
+	if old != nil {
+		old.Close()
+	}
+	return nil
+}
+
+func (m *MMDB) Lookup(ipStr string) (Location, bool) {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return Location{}, false
+	}
+	m.mu.RLock()
+	db := m.db
+	m.mu.RUnlock()
+	if db == nil {
+		return Location{}, false
+	}
+	rec, err := db.City(ip)
+	if err != nil || rec == nil || (rec.Location.Latitude == 0 && rec.Location.Longitude == 0) {
+		return Location{}, false
+	}
+	return Location{City: rec.City.Names["en"], Country: rec.Country.IsoCode, Lat: rec.Location.Latitude, Lng: rec.Location.Longitude}, true
+}
+
+func (m *MMDB) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.db != nil {
+		return m.db.Close()
+	}
+	return nil
+}
+```
+
+Keep the existing `resolver_test.go` (Open-missing-file still errors; the `fakeResolver` interface test still compiles). Add: `New()` then `Lookup("1.2.3.4")` returns `false` (no DB); `Reload("/no/such.mmdb")` returns an error.
+
+- [ ] **Step 3: geo updater (TDD with httptest)**
+
+Create `updater.go`:
+
+```go
+package geo
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+const editionID = "GeoLite2-City"
+
+// baseURL is a var so tests can point it at an httptest server.
+var baseURL = "https://download.maxmind.com/app/geoip_download"
+
+func dlURL(licenseKey, suffix string) string {
+	return fmt.Sprintf("%s?edition_id=%s&license_key=%s&suffix=%s", baseURL, editionID, licenseKey, suffix)
+}
+
+func httpGet(ctx context.Context, url string) ([]byte, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: status %d", strings.Split(url, "?")[0], resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// remoteSHA returns the published sha256 of the current tar.gz (first token of
+// the ".sha256" body, which is "<hex>  <filename>").
+func remoteSHA(ctx context.Context, licenseKey string) (string, error) {
+	b, err := httpGet(ctx, dlURL(licenseKey, "tar.gz.sha256"))
+	if err != nil {
+		return "", err
+	}
+	return strings.Fields(string(b))[0], nil
+}
+
+// Update downloads + extracts GeoLite2-City to dbPath when the local DB is
+// missing or the remote tar.gz.sha256 differs from the <dbPath>.sha256 sidecar.
+// Returns changed=true when it wrote a new DB.
+func Update(ctx context.Context, licenseKey, dbPath string) (bool, error) {
+	remote, err := remoteSHA(ctx, licenseKey)
+	if err != nil {
+		return false, fmt.Errorf("remote sha: %w", err)
+	}
+	sidecar := dbPath + ".sha256"
+	if _, statErr := os.Stat(dbPath); statErr == nil {
+		if cur, _ := os.ReadFile(sidecar); strings.TrimSpace(string(cur)) == remote {
+			return false, nil // up to date
+		}
+	}
+
+	gz, err := httpGet(ctx, dlURL(licenseKey, "tar.gz"))
+	if err != nil {
+		return false, fmt.Errorf("download: %w", err)
+	}
+	if got := hex.EncodeToString(sha256.New().Sum(nil)); false {
+		_ = got // placeholder; real check below
+	}
+	sum := sha256.Sum256(gz)
+	if hex.EncodeToString(sum[:]) != remote {
+		return false, fmt.Errorf("sha256 mismatch: archive does not match published checksum")
+	}
+
+	mmdb, err := extractMMDB(gz)
+	if err != nil {
+		return false, err
+	}
+	// atomic replace
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return false, err
+	}
+	tmp := dbPath + ".tmp"
+	if err := os.WriteFile(tmp, mmdb, 0o644); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmp, dbPath); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(sidecar, []byte(remote), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// extractMMDB pulls the single *.mmdb entry out of a gzipped tar archive.
+func extractMMDB(gzBytes []byte) ([]byte, error) {
+	zr, err := gzip.NewReader(bytes.NewReader(gzBytes))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	tr := tar.NewReader(zr)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return nil, fmt.Errorf("no .mmdb entry in archive")
+		}
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(h.Name, ".mmdb") {
+			return io.ReadAll(tr)
+		}
+	}
+}
+```
+
+(Remove the dead `if got := ...; false {}` block — it's an editing artifact; do NOT include it. The real check is `sum := sha256.Sum256(gz)` …)
+
+`updater_test.go` (no real MaxMind — spin up an httptest server, point `baseURL` at it, serve a synthetic gzip-tar containing a fake `GeoLite2-City_20260101/GeoLite2-City.mmdb` and the matching `.sha256`):
+
+```go
+package geo
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func makeArchive(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(zw)
+	hdr := &tar.Header{Name: "GeoLite2-City_20260101/GeoLite2-City.mmdb", Mode: 0o644, Size: int64(len(payload))}
+	if err := tw.WriteHeader(hdr); err != nil {
+		t.Fatal(err)
+	}
+	tw.Write(payload)
+	tw.Close()
+	zw.Close()
+	return buf.Bytes()
+}
+
+func TestUpdateDownloadsAndDetectsUpToDate(t *testing.T) {
+	payload := []byte("fake-mmdb-bytes")
+	archive := makeArchive(t, payload)
+	sum := sha256.Sum256(archive)
+	shaHex := hex.EncodeToString(sum[:])
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("suffix") {
+		case "tar.gz.sha256":
+			w.Write([]byte(shaHex + "  GeoLite2-City_20260101.tar.gz\n"))
+		case "tar.gz":
+			w.Write(archive)
+		default:
+			http.Error(w, "bad suffix", 400)
+		}
+	}))
+	defer srv.Close()
+
+	old := baseURL
+	baseURL = srv.URL
+	defer func() { baseURL = old }()
+
+	dbPath := filepath.Join(t.TempDir(), "GeoLite2-City.mmdb")
+
+	changed, err := Update(context.Background(), "k", dbPath)
+	if err != nil || !changed {
+		t.Fatalf("first update: changed=%v err=%v", changed, err)
+	}
+	got, _ := os.ReadFile(dbPath)
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("extracted mmdb mismatch: %q", got)
+	}
+	if cur, _ := os.ReadFile(dbPath + ".sha256"); strings.TrimSpace(string(cur)) != shaHex {
+		t.Fatalf("sidecar not written")
+	}
+
+	// second call: sidecar matches remote → no change
+	changed, err = Update(context.Background(), "k", dbPath)
+	if err != nil || changed {
+		t.Fatalf("second update should be no-op: changed=%v err=%v", changed, err)
+	}
+}
+```
+
+- [ ] **Step 4: main.go — wire startup download + ticker + hot reload**
+
+Replace the `geo.Open(...)` block in `run` with graceful auto-update wiring:
+
+```go
+	// 3. GeoIP — auto-update (default on) then open; tolerate a missing DB.
+	resolver := geo.New()
+	if cfg.GeoIPAutoUpdate && cfg.GeoIPLicenseKey != "" {
+		if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
+			log.Warn().Err(err).Msg("geoip update failed; will use existing DB if present")
+		}
+	}
+	if err := resolver.Reload(cfg.GeoIPPath); err != nil {
+		log.Warn().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip DB unavailable; country drill-down disabled")
+	}
+	defer resolver.Close()
+
+	// Background 24h refresh + hot reload (only when auto-update is enabled).
+	if cfg.GeoIPAutoUpdate && cfg.GeoIPLicenseKey != "" {
+		go func() {
+			t := time.NewTicker(24 * time.Hour)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					changed, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath)
+					if err != nil {
+						log.Warn().Err(err).Msg("geoip refresh failed")
+						continue
+					}
+					if changed {
+						if err := resolver.Reload(cfg.GeoIPPath); err != nil {
+							log.Warn().Err(err).Msg("geoip reload failed")
+						} else {
+							log.Info().Msg("geoip DB refreshed")
+						}
+					}
+				}
+			}
+		}()
+	}
+```
+
+(`resolver` is a `*geo.MMDB`, which satisfies `geo.Resolver`, so `handlers.API{Geo: resolver}` is unchanged. Remove the old `geo.Open` + its `log.Fatal` path.)
+
+- [ ] **Step 5: .gitignore the DB + sidecar + temp**
+
+Add to `monitoring/packages/app/.gitignore`:
+
+```
+GeoLite2-City.mmdb
+GeoLite2-City.mmdb.sha256
+GeoLite2-City.mmdb.tmp
+```
+
+- [ ] **Step 6: build + test + commit**
+
+Run: `cd monitoring/packages/app && go build ./... && go test ./...`
+Expected: all PASS (config, geo resolver, geo updater via httptest).
+
+```bash
+git add monitoring/packages/app/internal/config monitoring/packages/app/internal/geo \
+  monitoring/packages/app/cmd/main.go monitoring/packages/app/.gitignore monitoring/packages/app/go.mod monitoring/packages/app/go.sum
+git commit -m "feat(monitoring): GeoIP auto-update (download + 24h refresh + hot reload)"
+```
+
+---
+
 ## Self-Review
 
 **1. Spec coverage:**
