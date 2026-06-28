@@ -74,7 +74,7 @@ monitoring/
 cd monitoring/packages/app
 go mod init isnan.eu/monitoring
 go get github.com/gin-gonic/gin@v1.10.0
-go get github.com/sirupsen/logrus@v1.9.3
+go get github.com/rs/zerolog@v1.33.0
 go get github.com/pkg/browser@v0.0.0-20240102092130-5ac0b6a4141c
 go get github.com/aws/aws-sdk-go-v2@v1.32.6
 go get github.com/aws/aws-sdk-go-v2/config@v1.28.6
@@ -201,22 +201,23 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"isnan.eu/monitoring/internal/handlers"
 	"isnan.eu/monitoring/internal/web"
 )
 
 func main() {
-	log.SetOutput(os.Stdout)
+	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.GET("/api/health", handlers.Health)
 	r.NoRoute(gin.WrapH(web.Handler())) // serve embedded SPA for everything else
 
 	addr := "127.0.0.1:8080"
-	log.Infof("serving on http://%s", addr)
+	log.Info().Msgf("serving on http://%s", addr)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("server exited: %v", err)
+		log.Fatal().Err(err).Msg("server exited")
 	}
 }
 ```
@@ -1382,7 +1383,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
 	oidctypes "github.com/aws/aws-sdk-go-v2/service/ssooidc/types"
 	"github.com/pkg/browser"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type Config struct {
@@ -1439,7 +1440,7 @@ func Login(ctx context.Context, c Config) (aws.CredentialsProvider, error) {
 			return nil, err
 		}
 		if err := saveToken(path, tok); err != nil {
-			log.Warnf("could not cache SSO token: %v", err)
+			log.Warn().Err(err).Msg("could not cache SSO token")
 		}
 	}
 
@@ -1468,7 +1469,7 @@ func deviceFlow(ctx context.Context, c Config) (cachedToken, error) {
 		return cachedToken{}, fmt.Errorf("start device auth: %w", err)
 	}
 
-	log.Infof("Opening browser to approve sign-in. If it doesn't open, visit: %s", aws.ToString(dev.VerificationUriComplete))
+	log.Info().Msgf("Opening browser to approve sign-in. If it doesn't open, visit: %s", aws.ToString(dev.VerificationUriComplete))
 	_ = browser.OpenURL(aws.ToString(dev.VerificationUriComplete))
 
 	interval := time.Duration(dev.Interval) * time.Second
@@ -1569,7 +1570,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	athenacli "isnan.eu/monitoring/internal/athena"
 	"isnan.eu/monitoring/internal/cache"
@@ -1580,7 +1582,7 @@ import (
 )
 
 func main() {
-	log.SetOutput(os.Stdout)
+	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	// Each flag defaults to its env var, so the binary works with either flags or env.
 	startURL := flag.String("sso-start-url", os.Getenv("MONITORING_SSO_START_URL"), "IAM Identity Center start URL")
@@ -1596,7 +1598,7 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Fatal().Err(err).Msg("config")
 	}
 
 	// 1. Authenticate with IAM Identity Center (device flow on cold cache).
@@ -1607,7 +1609,7 @@ func main() {
 		RoleName:  *ssoRole,
 	})
 	if err != nil {
-		log.Fatalf("sso login: %v", err)
+		log.Fatal().Err(err).Msg("sso login")
 	}
 
 	// 2. AWS config (Athena region) using the IdC credentials.
@@ -1616,13 +1618,13 @@ func main() {
 		awsconfig.WithCredentialsProvider(creds),
 	)
 	if err != nil {
-		log.Fatalf("aws config: %v", err)
+		log.Fatal().Err(err).Msg("aws config")
 	}
 
 	// 3. GeoIP from local file.
 	resolver, err := geo.Open(cfg.GeoIPPath)
 	if err != nil {
-		log.Fatalf("geoip open (%s): %v", cfg.GeoIPPath, err)
+		log.Fatal().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip open")
 	}
 	defer resolver.Close()
 
@@ -1637,18 +1639,18 @@ func main() {
 	//    then open the browser to it and serve on that listener.
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
-		log.Fatalf("listen on %s: %v", *addr, err)
+		log.Fatal().Err(err).Str("addr", *addr).Msg("listen")
 	}
 	url := "http://" + ln.Addr().String()
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		log.Infof("opening %s", url)
+		log.Info().Msgf("opening %s", url)
 		_ = browser.OpenURL(url)
 	}()
 
-	log.Infof("serving on %s", url)
+	log.Info().Msgf("serving on %s", url)
 	if err := r.RunListener(ln); err != nil {
-		log.Fatalf("server exited: %v", err)
+		log.Fatal().Err(err).Msg("server exited")
 	}
 }
 ```
