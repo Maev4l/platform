@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -82,6 +83,7 @@ func (a *API) sources(c *gin.Context) {
 	for n := range a.Cfg.Sources {
 		names = append(names, n)
 	}
+	sort.Strings(names) // stable order so the UI source selector doesn't reshuffle
 	c.JSON(http.StatusOK, names)
 }
 
