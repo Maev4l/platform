@@ -51,6 +51,10 @@ func (c *Client) Query(ctx context.Context, sql string, args []string) ([]map[st
 		return nil, fmt.Errorf("start query: %w", err)
 	}
 	id := start.QueryExecutionId
+	// Guard against nil execution ID from SDK (not guaranteed to be non-nil).
+	if id == nil {
+		return nil, fmt.Errorf("start query: no execution id returned")
+	}
 
 	// Poll with exponential backoff (200 ms → 2 s cap) until terminal state.
 	backoff := 200 * time.Millisecond
@@ -58,6 +62,10 @@ func (c *Client) Query(ctx context.Context, sql string, args []string) ([]map[st
 		ex, err := c.api.GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: id})
 		if err != nil {
 			return nil, fmt.Errorf("poll query: %w", err)
+		}
+		// Guard against nil QueryExecution or Status from SDK (not guaranteed to be non-nil).
+		if ex.QueryExecution == nil || ex.QueryExecution.Status == nil {
+			return nil, fmt.Errorf("poll query: empty execution status")
 		}
 		switch ex.QueryExecution.Status.State {
 		case atypes.QueryExecutionStateSucceeded:
@@ -92,6 +100,10 @@ func (c *Client) fetch(ctx context.Context, id *string) ([]map[string]string, er
 		res, err := c.api.GetQueryResults(ctx, &athena.GetQueryResultsInput{QueryExecutionId: id, NextToken: token})
 		if err != nil {
 			return nil, fmt.Errorf("fetch results: %w", err)
+		}
+		// Guard against nil ResultSet from SDK (not guaranteed to be non-nil).
+		if res.ResultSet == nil {
+			break
 		}
 		rows := res.ResultSet.Rows
 		startIdx := 0
