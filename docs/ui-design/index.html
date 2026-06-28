@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDGE//WATCH — CloudFront Access Telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://fastly.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#08090b;
+    --bg-2:#0c0e12;
+    --panel:#0f1217;
+    --panel-2:#12151b;
+    --line:#1c2129;
+    --line-2:#262c36;
+    --txt:#e7ebef;
+    --txt-2:#9aa3af;
+    --txt-3:#5c6470;
+    --signal:#c8f135;      /* phosphor lime — primary data signal */
+    --signal-dim:#8ba31f;
+    --cyan:#39d9c8;        /* secondary accent */
+    --amber:#ffb020;       /* 4xx / warning */
+    --red:#ff5a5a;         /* 5xx / error */
+    --blue:#5b9bff;        /* 3xx */
+    --radius:4px;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --sans:'IBM Plex Sans', system-ui, sans-serif;
+    --disp:'Archivo', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--txt);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    position:relative;
+  }
+  /* tactical grid + grain atmosphere */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    background-size:42px 42px;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+  #app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
+
+  /* ---------- HEADER ---------- */
+  header{
+    display:flex;align-items:center;gap:24px;
+    padding:0 22px;height:58px;flex-shrink:0;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--bg-2),var(--bg));
+  }
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .glyph{
+    color:var(--signal);font-size:18px;line-height:1;
+    filter:drop-shadow(0 0 6px rgba(200,241,53,.6));
+  }
+  .brand .name{
+    font-family:var(--disp);font-weight:800;letter-spacing:.02em;
+    font-size:16px;color:var(--txt);
+  }
+  .brand .name b{color:var(--signal);font-weight:800}
+  .brand .sub{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--txt-3);margin-top:1px;
+  }
+  .brand .div{width:1px;height:26px;background:var(--line);margin:0 4px}
+
+  .controls{display:flex;align-items:center;gap:10px;margin-left:auto}
+  .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt-3);margin-right:7px}
+
+  .ctl{
+    display:flex;align-items:center;gap:9px;height:34px;padding:0 12px;
+    background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);
+    font-family:var(--mono);font-size:12px;color:var(--txt);cursor:pointer;
+    transition:border-color .15s, background .15s;white-space:nowrap;
+  }
+  .ctl:hover{border-color:var(--signal-dim);background:var(--panel-2)}
+  .ctl .caret{color:var(--txt-3);font-size:9px}
+  .ctl .dot{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 8px var(--signal)}
+  .ctl.source .src-app{color:var(--txt-2)}
+  .ctl.source .src-dist{color:var(--signal)}
+
+  /* segmented control */
+  .seg{display:flex;height:34px;border:1px solid var(--line-2);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+  .seg button{
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    background:transparent;color:var(--txt-2);border:none;padding:0 13px;cursor:pointer;
+    transition:.15s;border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--signal);color:#0b0d07;font-weight:600}
+  .seg button:not(.on):hover{color:var(--txt);background:var(--panel-2)}
+
+  .live{
+    display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
+    letter-spacing:.16em;color:var(--txt-2);padding-left:6px;
+  }
+  .live .pulse{width:7px;height:7px;border-radius:50%;background:var(--signal);position:relative}
+  .live .pulse::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--signal);animation:ring 1.8s ease-out infinite}
+  @keyframes ring{0%{transform:scale(.6);opacity:.9}100%{transform:scale(2.2);opacity:0}}
+
+  /* ---------- LAYOUT ---------- */
+  main{flex:1;display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr auto;gap:14px;padding:16px 18px;min-height:0}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--bg-2));
+    border:1px solid var(--line);border-radius:var(--radius);position:relative;
+    opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  @keyframes rise{to{opacity:1;transform:none}}
+  .panel:nth-child(1){animation-delay:.02s}
+  .panel:nth-child(2){animation-delay:.08s}
+  .panel:nth-child(3){animation-delay:.14s}
+  .panel:nth-child(4){animation-delay:.2s}
+  /* corner ticks */
+  .panel::before,.panel::after{content:"";position:absolute;width:9px;height:9px;pointer-events:none}
+  .panel::before{top:-1px;left:-1px;border-top:1px solid var(--line-2);border-left:1px solid var(--line-2)}
+  .panel::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--line-2);border-right:1px solid var(--line-2)}
+
+  .panel-hd{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .panel-hd h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--txt-2);font-weight:500}
+  .panel-hd .tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--txt-3);letter-spacing:.1em}
+
+  /* ---------- KPI ROW ---------- */
+  .kpis{grid-column:1 / -1;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{
+    background:linear-gradient(180deg,var(--panel),var(--bg-2));
+    border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden;
+    opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .kpi:nth-child(1){animation-delay:.02s}.kpi:nth-child(2){animation-delay:.06s}
+  .kpi:nth-child(3){animation-delay:.1s}.kpi:nth-child(4){animation-delay:.14s}
+  .kpi .k-top{display:flex;align-items:center;justify-content:space-between}
+  .kpi .k-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt-3)}
+  .kpi .k-val{font-family:var(--mono);font-weight:600;font-size:30px;letter-spacing:-.01em;margin-top:8px;line-height:1;font-variant-numeric:tabular-nums}
+  .kpi .k-val .u{font-size:14px;color:var(--txt-3);margin-left:3px}
+  .kpi .k-delta{font-family:var(--mono);font-size:11px;margin-top:7px;display:flex;align-items:center;gap:5px}
+  .up{color:var(--signal)}.down{color:var(--red)}.flat{color:var(--txt-3)}
+  .kpi .spark{position:absolute;right:0;bottom:0;width:96px;height:38px;opacity:.5}
+  .kpi.accent .k-val{color:var(--signal)}
+  .kpi .rail{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line-2)}
+  .kpi.accent .rail{background:var(--signal);box-shadow:0 0 10px rgba(200,241,53,.5)}
+  .kpi.warn .rail{background:var(--amber)}
+
+  /* ---------- MAP ---------- */
+  .map-panel{grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0}
+  .breadcrumb{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px}
+  .breadcrumb .crumb{color:var(--txt-3);letter-spacing:.1em;text-transform:uppercase}
+  .breadcrumb .crumb.here{color:var(--signal)}
+  .breadcrumb .sep{color:var(--txt-3)}
+  .back-btn{
+    display:none;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line-2);
+    color:var(--txt-2);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:5px 10px;border-radius:var(--radius);cursor:pointer;transition:.15s;
+  }
+  .back-btn:hover{border-color:var(--signal-dim);color:var(--txt)}
+  body.drill .back-btn{display:flex}
+  .bc-meta{margin-left:auto;display:flex;gap:18px;font-family:var(--mono);font-size:10.5px;color:var(--txt-3);letter-spacing:.08em}
+  .bc-meta b{color:var(--txt);font-weight:600}
+  #map{flex:1;min-height:0;width:100%}
+  .map-hint{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:9.5px;color:var(--txt-3);letter-spacing:.1em;display:flex;align-items:center;gap:7px;pointer-events:none;z-index:2}
+  .map-hint .b{width:8px;height:8px;border-radius:50%;background:var(--signal);box-shadow:0 0 8px var(--signal)}
+
+  /* ---------- RIGHT RAIL ---------- */
+  .rail-col{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:14px;min-height:0}
+  .donut-wrap{display:flex;align-items:center;gap:8px;padding:6px 14px 14px}
+  #donut{width:140px;height:140px;flex-shrink:0}
+  .legend{flex:1;display:flex;flex-direction:column;gap:9px}
+  .legend .row{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11.5px}
+  .legend .sw{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+  .legend .nm{color:var(--txt-2);width:34px}
+  .legend .pct{margin-left:auto;color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+  .legend .cnt{color:var(--txt-3);width:54px;text-align:right;font-size:10.5px}
+
+  .list-panel{flex:1;display:flex;flex-direction:column;min-height:0}
+  .list{flex:1;overflow:auto;padding:6px 0}
+  .list::-webkit-scrollbar{width:6px}
+  .list::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+  .uri{display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:8px 14px;position:relative}
+  .uri:hover{background:var(--panel-2)}
+  .uri .path{font-family:var(--mono);font-size:11.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .uri .num{font-family:var(--mono);font-size:11.5px;color:var(--txt-2);font-variant-numeric:tabular-nums}
+  .uri .bar{grid-column:1 / -1;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+  .uri .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--signal-dim),var(--signal));border-radius:2px}
+  .uri .meta{grid-column:1 / -1;font-family:var(--mono);font-size:9.5px;color:var(--txt-3);letter-spacing:.06em}
+
+  /* ---------- HISTOGRAM ---------- */
+  .hist-panel{grid-column:1 / -1;grid-row:3;height:188px;display:flex;flex-direction:column}
+  #hist{flex:1;width:100%;min-height:0}
+  .hist-legend{display:flex;gap:16px;margin-left:auto}
+  .hist-legend .row{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--txt-2);letter-spacing:.08em}
+  .hist-legend .sw{width:9px;height:9px;border-radius:2px}
+
+  .echarts-tip{font-family:var(--mono)!important}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== HEADER ===== -->
+  <header>
+    <div class="brand">
+      <span class="glyph">◢</span>
+      <div>
+        <div class="name">EDGE<b>//</b>WATCH</div>
+        <div class="sub">cloudfront access telemetry</div>
+      </div>
+    </div>
+    <div class="brand"><span class="div"></span></div>
+
+    <div class="controls">
+      <span class="lbl">Source</span>
+      <div class="ctl source">
+        <span class="dot"></span>
+        <span><span class="src-app">brigitte-leroux</span> <span class="src-dist">/ site</span></span>
+        <span class="caret">▼</span>
+      </div>
+
+      <span class="lbl" style="margin-left:8px">Range</span>
+      <div class="ctl"><span>Last 14 days</span><span class="caret">▼</span></div>
+
+      <div class="seg" id="seg">
+        <button data-g="day" class="on">Day</button>
+        <button data-g="week">Week</button>
+        <button data-g="month">Month</button>
+      </div>
+
+      <div class="live"><span class="pulse"></span>LIVE · ATHENA</div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN GRID ===== -->
+  <main>
+
+    <!-- KPI ROW -->
+    <section class="kpis">
+      <div class="kpi accent">
+        <span class="rail"></span>
+        <div class="k-top"><span class="k-lbl">Total Requests</span></div>
+        <div class="k-val">58,932</div>
+        <div class="k-delta up">▲ 12.4% <span class="flat">vs prev 14d</span></div>
+      </div>
+      <div class="kpi">
+        <span class="rail"></span>
+        <div class="k-top"><span class="k-lbl">Unique Callers</span></div>
+        <div class="k-val">12,408 <span class="u">ip</span></div>
+        <div class="k-delta up">▲ 5.1% <span class="flat">vs prev 14d</span></div>
+      </div>
+      <div class="kpi warn">
+        <span class="rail"></span>
+        <div class="k-top"><span class="k-lbl">Error Rate · 4xx+5xx</span></div>
+        <div class="k-val" style="color:var(--amber)">2.34<span class="u">%</span></div>
+        <div class="k-delta down">▲ 0.6pt <span class="flat">vs prev 14d</span></div>
+      </div>
+      <div class="kpi">
+        <span class="rail"></span>
+        <div class="k-top"><span class="k-lbl">Countries</span></div>
+        <div class="k-val">47</div>
+        <div class="k-delta flat">— stable</div>
+      </div>
+    </section>
+
+    <!-- MAP -->
+    <section class="panel map-panel">
+      <div class="breadcrumb">
+        <button class="back-btn" onclick="exitDrill()">◀ Back</button>
+        <span class="crumb here" id="bc-1">Global View</span>
+        <span class="sep" id="bc-sep" style="display:none">▸</span>
+        <span class="crumb here" id="bc-2" style="display:none"></span>
+        <div class="bc-meta">
+          <span id="bc-m1">Callers per country · <b>47 territories</b></span>
+        </div>
+      </div>
+      <div style="position:relative;flex:1;min-height:0">
+        <div id="map"></div>
+        <div class="map-hint"><span class="b"></span><span id="hint">Click a country blip to drill into per-IP locations</span></div>
+      </div>
+    </section>
+
+    <!-- RIGHT RAIL -->
+    <aside class="rail-col">
+      <div class="panel">
+        <div class="panel-hd"><h2>Status Mix</h2><span class="tag">HTTP CLASS</span></div>
+        <div class="donut-wrap">
+          <div id="donut"></div>
+          <div class="legend">
+            <div class="row"><span class="sw" style="background:var(--signal)"></span><span class="nm">2xx</span><span class="pct">78.4%</span><span class="cnt">46,204</span></div>
+            <div class="row"><span class="sw" style="background:var(--blue)"></span><span class="nm">3xx</span><span class="pct">11.9%</span><span class="cnt">7,012</span></div>
+            <div class="row"><span class="sw" style="background:var(--amber)"></span><span class="nm">4xx</span><span class="pct">7.6%</span><span class="cnt">4,479</span></div>
+            <div class="row"><span class="sw" style="background:var(--red)"></span><span class="nm">5xx</span><span class="pct">2.1%</span><span class="cnt">1,237</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel list-panel">
+        <div class="panel-hd"><h2 id="list-title">Top URIs</h2><span class="tag" id="list-tag">BY REQUESTS</span></div>
+        <div class="list" id="list"></div>
+      </div>
+    </aside>
+
+    <!-- HISTOGRAM -->
+    <section class="panel hist-panel">
+      <div class="panel-hd">
+        <h2>Requests Over Time</h2>
+        <div class="hist-legend">
+          <div class="row"><span class="sw" style="background:var(--signal)"></span>2xx</div>
+          <div class="row"><span class="sw" style="background:var(--blue)"></span>3xx</div>
+          <div class="row"><span class="sw" style="background:var(--amber)"></span>4xx</div>
+          <div class="row"><span class="sw" style="background:var(--red)"></span>5xx</div>
+        </div>
+      </div>
+      <div id="hist"></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const C = {
+  signal:'#c8f135', cyan:'#39d9c8', amber:'#ffb020', red:'#ff5a5a',
+  blue:'#5b9bff', txt:'#e7ebef', txt2:'#9aa3af', txt3:'#5c6470',
+  line:'#1c2129', panel:'#0f1217', mono:"'IBM Plex Mono', monospace"
+};
+
+const tip = {
+  backgroundColor:'#0c0e12', borderColor:C.line, borderWidth:1,
+  padding:[8,11], textStyle:{color:C.txt, fontFamily:C.mono, fontSize:11},
+  extraCssText:'border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,.6)'
+};
+
+/* ---------- DATA ---------- */
+const COUNTRIES = [
+  {name:'United States', coord:[-98,39],   v:18432},
+  {name:'France',        coord:[2.4,46.6], v:9241},
+  {name:'Germany',       coord:[10.4,51.1],v:7120},
+  {name:'United Kingdom',coord:[-1.5,52.6],v:5310},
+  {name:'Spain',         coord:[-3.7,40.2],v:1520},
+  {name:'Brazil',        coord:[-51,-10],  v:4022},
+  {name:'India',         coord:[79,22],    v:3890},
+  {name:'Japan',         coord:[138,36.5], v:2740},
+  {name:'Canada',        coord:[-106,56],  v:2210},
+  {name:'Australia',     coord:[134,-25],  v:1980},
+  {name:'Singapore',     coord:[103.8,1.35],v:1640},
+  {name:'South Africa',  coord:[24.5,-29], v:980},
+];
+
+// France drill-down: per-IP blips around major cities
+const FR_CITIES = [
+  {c:'Paris',coord:[2.35,48.85],n:1180},{c:'Lyon',coord:[4.83,45.76],n:540},
+  {c:'Marseille',coord:[5.37,43.30],n:430},{c:'Toulouse',coord:[1.44,43.60],n:300},
+  {c:'Bordeaux',coord:[-0.58,44.84],n:260},{c:'Lille',coord:[3.06,50.63],n:220},
+  {c:'Nantes',coord:[-1.55,47.22],n:190},{c:'Nice',coord:[7.26,43.70],n:160},
+  {c:'Strasbourg',coord:[7.75,48.58],n:120},{c:'Rennes',coord:[-1.68,48.11],n:90},
+];
+function frIpDots(){
+  const out=[]; let seed=7;
+  const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
+  FR_CITIES.forEach(ct=>{
+    const k=Math.max(3,Math.round(ct.n/55));
+    for(let i=0;i<k;i++){
+      out.push({
+        name:`${ct.c} · ${ip(rnd)}`,
+        value:[ct.coord[0]+(rnd()-.5)*1.1, ct.coord[1]+(rnd()-.5)*0.8, 8+Math.round(rnd()*60)]
+      });
+    }
+  });
+  return out;
+}
+function ip(r){return `${1+Math.floor(r()*222)}.${Math.floor(r()*255)}.${Math.floor(r()*255)}.${Math.floor(r()*255)}`}
+
+const URIS = [
+  {p:'/',                      n:14820, m:'200 · text/html'},
+  {p:'/assets/app.4f1c.js',    n:12104, m:'200 · application/javascript'},
+  {p:'/assets/index.a93b.css', n:9870,  m:'200 · text/css'},
+  {p:'/api/portfolio',         n:6240,  m:'200 · application/json'},
+  {p:'/static/hero.webp',      n:5110,  m:'200 · image/webp'},
+  {p:'/favicon.ico',           n:3902,  m:'200 · image/x-icon'},
+  {p:'/robots.txt',            n:1208,  m:'404 · not found'},
+  {p:'/wp-login.php',          n:642,   m:'403 · blocked'},
+];
+const FR_IPS = [
+  {p:'92.184.105.12',  n:842,  m:'Paris · AS3215 Orange'},
+  {p:'88.160.44.201',  n:611,  m:'Lyon · AS3215 Orange'},
+  {p:'176.150.8.77',   n:540,  m:'Marseille · AS12322 Free'},
+  {p:'2.7.221.190',    n:430,  m:'Toulouse · AS15557 SFR'},
+  {p:'195.154.2.50',   n:388,  m:'Bordeaux · AS12876 Scaleway'},
+  {p:'37.165.99.4',    n:301,  m:'Lille · AS3215 Orange'},
+  {p:'212.95.71.18',   n:244,  m:'Nantes · AS21502 SFR'},
+  {p:'109.190.7.220',  n:190,  m:'Nice · AS12876 Online'},
+];
+
+/* ---------- HISTOGRAM DATASETS ---------- */
+const HIST = {
+  day:{ x:['Jun 14','15','16','17','18','19','20','21','22','23','24','25','26','27'],
+        base:[3100,3320,2980,3540,4010,3760,2210,2380,3990,4220,4480,4310,4690,4520] },
+  week:{ x:['W19','W20','W21','W22','W23','W24','W25','W26'],
+        base:[19200,21400,20100,22800,24200,23100,25600,26900] },
+  month:{ x:['Jan','Feb','Mar','Apr','May','Jun'],
+        base:[71000,68400,79200,84100,91300,88600] }
+};
+function stack(base){
+  // split each bucket into 2xx/3xx/4xx/5xx by fixed ratios
+  return {
+    s2:base.map(v=>Math.round(v*0.784)),
+    s3:base.map(v=>Math.round(v*0.119)),
+    s4:base.map(v=>Math.round(v*0.076)),
+    s5:base.map(v=>Math.round(v*0.021)),
+  };
+}
+
+/* ---------- LIST RENDER ---------- */
+function renderList(items){
+  const max=Math.max(...items.map(i=>i.n));
+  document.getElementById('list').innerHTML = items.map(i=>`
+    <div class="uri">
+      <span class="path">${i.p}</span>
+      <span class="num">${i.n.toLocaleString()}</span>
+      <span class="bar"><i style="width:${(i.n/max*100).toFixed(1)}%"></i></span>
+      <span class="meta">${i.m}</span>
+    </div>`).join('');
+}
+
+/* ---------- CHARTS ---------- */
+let mapChart, donutChart, histChart, currentG='day';
+
+function sparkline(el, data, color){
+  const c = echarts.init(el);
+  c.setOption({grid:{left:0,right:0,top:6,bottom:0},xAxis:{type:'category',show:false,data:data.map((_,i)=>i)},
+    yAxis:{type:'value',show:false},series:[{type:'line',data,smooth:true,symbol:'none',
+      lineStyle:{color,width:1.5},areaStyle:{color:'rgba(200,241,53,.12)'}}]});
+}
+
+function buildDonut(){
+  donutChart = echarts.init(document.getElementById('donut'));
+  donutChart.setOption({
+    tooltip:{...tip,formatter:p=>`${p.name}  <b>${p.value.toLocaleString()}</b> (${p.percent}%)`},
+    series:[{
+      type:'pie', radius:['62%','92%'], center:['50%','50%'], avoidLabelOverlap:false,
+      itemStyle:{borderColor:C.panel,borderWidth:2}, label:{show:false}, labelLine:{show:false},
+      data:[
+        {value:46204,name:'2xx',itemStyle:{color:C.signal}},
+        {value:7012, name:'3xx',itemStyle:{color:C.blue}},
+        {value:4479, name:'4xx',itemStyle:{color:C.amber}},
+        {value:1237, name:'5xx',itemStyle:{color:C.red}},
+      ]
+    }]
+  });
+}
+
+function buildHist(g){
+  const d=HIST[g], s=stack(d.base);
+  const series=[
+    ['2xx',s.s2,C.signal],['3xx',s.s3,C.blue],['4xx',s.s4,C.amber],['5xx',s.s5,C.red]
+  ].map(([nm,data,col])=>({
+    name:nm,type:'bar',stack:'t',data,barWidth:'58%',
+    itemStyle:{color:col, borderRadius: nm==='5xx'?[2,2,0,0]:0}
+  }));
+  histChart.setOption({
+    tooltip:{...tip,trigger:'axis',axisPointer:{type:'shadow',shadowStyle:{color:'rgba(200,241,53,.06)'}}},
+    grid:{left:54,right:18,top:14,bottom:24},
+    xAxis:{type:'category',data:d.x,axisLine:{lineStyle:{color:C.line}},
+      axisTick:{show:false},axisLabel:{color:C.txt3,fontFamily:C.mono,fontSize:10}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'rgba(255,255,255,.04)'}},
+      axisLabel:{color:C.txt3,fontFamily:C.mono,fontSize:10,formatter:v=>v>=1000?(v/1000)+'k':v}},
+    series
+  },true);
+}
+
+function worldOption(){
+  return {
+    tooltip:{...tip, formatter:p=>p.value?`${p.name}<br/><b style="color:${C.signal}">${p.value[2].toLocaleString()}</b> callers`:p.name},
+    geo:{
+      map:'world', roam:true, nameProperty:'name', zoom:1.2, center:[12,28],
+      itemStyle:{areaColor:'#13161c',borderColor:'#262c36',borderWidth:.6},
+      emphasis:{itemStyle:{areaColor:'#1a1f27'},label:{show:false}},
+      scaleLimit:{min:1,max:8}
+    },
+    series:[{
+      type:'effectScatter', coordinateSystem:'geo', name:'callers', zlevel:2,
+      data:COUNTRIES.map(c=>({name:c.name,value:[...c.coord,c.v]})),
+      symbolSize:v=>Math.max(9,Math.sqrt(v[2])/2.4),
+      showEffectOn:'render', rippleEffect:{brushType:'stroke',scale:2.6,period:4},
+      itemStyle:{color:C.signal,shadowBlur:14,shadowColor:'rgba(200,241,53,.75)'},
+      emphasis:{scale:1.5},
+      label:{show:true,position:'right',formatter:p=>p.value[2]>3000?p.name:'',
+        color:C.txt2,fontFamily:C.mono,fontSize:10}
+    }]
+  };
+}
+
+function franceOption(){
+  return {
+    tooltip:{...tip, formatter:p=>p.value?`${p.name}<br/><b style="color:${C.cyan}">${p.value[2].toLocaleString()}</b> requests`:p.name},
+    geo:{
+      map:'world', roam:true, nameProperty:'name', zoom:11, center:[2.6,46.6],
+      itemStyle:{areaColor:'#13161c',borderColor:'#2a313c',borderWidth:.8},
+      emphasis:{itemStyle:{areaColor:'#1a1f27'},label:{show:false}},
+      regions:[{name:'France',itemStyle:{areaColor:'#171c22',borderColor:C.cyan,borderWidth:1.1}}],
+      scaleLimit:{min:4,max:40}
+    },
+    series:[{
+      type:'effectScatter', coordinateSystem:'geo', name:'ip', zlevel:2,
+      data:frIpDots(),
+      symbolSize:v=>Math.max(5,Math.sqrt(v[2])*1.0),
+      showEffectOn:'render', rippleEffect:{brushType:'stroke',scale:2.2,period:3.5},
+      itemStyle:{color:C.cyan,shadowBlur:10,shadowColor:'rgba(57,217,200,.7)'}
+    }]
+  };
+}
+
+/* ---------- DRILL STATE ---------- */
+function enterDrill(name){
+  if(name!=='France'){ // demo: only France has drill data; flash hint otherwise
+    document.getElementById('hint').textContent = `No per-IP sample loaded for ${name} — France is the demo drill target`;
+    return;
+  }
+  document.body.classList.add('drill');
+  document.getElementById('bc-1').classList.remove('here');
+  document.getElementById('bc-sep').style.display='inline';
+  const b2=document.getElementById('bc-2'); b2.style.display='inline'; b2.textContent='France';
+  document.getElementById('bc-m1').innerHTML='Per-IP locations · <b>3,204 callers</b> · <b>57 cities</b>';
+  document.getElementById('hint').textContent='Each blip = client IP, placed by GeoLite2 city lat/long';
+  document.getElementById('list-title').textContent='Top Callers · France';
+  document.getElementById('list-tag').textContent='BY REQUESTS';
+  renderList(FR_IPS);
+  mapChart.setOption(franceOption(), true);
+  mapChart.off('click'); mapChart.on('click', ()=>{});
+}
+function exitDrill(){
+  document.body.classList.remove('drill');
+  document.getElementById('bc-1').classList.add('here');
+  document.getElementById('bc-sep').style.display='none';
+  document.getElementById('bc-2').style.display='none';
+  document.getElementById('bc-m1').innerHTML='Callers per country · <b>47 territories</b>';
+  document.getElementById('hint').textContent='Click a country blip to drill into per-IP locations';
+  document.getElementById('list-title').textContent='Top URIs';
+  document.getElementById('list-tag').textContent='BY REQUESTS';
+  renderList(URIS);
+  mapChart.setOption(worldOption(), true);
+  bindMapClick();
+}
+function bindMapClick(){
+  mapChart.off('click');
+  mapChart.on('click', p=>{ if(p.seriesType==='effectScatter' && p.name) enterDrill(p.name.split(' · ')[0]); });
+}
+
+/* ---------- BOOT ---------- */
+function boot(geo){
+  echarts.registerMap('world', geo);
+  mapChart = echarts.init(document.getElementById('map'));
+  mapChart.setOption(worldOption());
+  bindMapClick();
+}
+
+buildDonut();
+histChart = echarts.init(document.getElementById('hist'));
+buildHist('day');
+renderList(URIS);
+// sparkline on the first KPI
+const sp=document.createElement('div'); sp.className='spark';
+document.querySelector('.kpi.accent').appendChild(sp);
+sparkline(sp,[31,33,30,35,40,38,22,24,40,42,45,43,47,45],C.signal);
+
+document.getElementById('seg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentG=b.dataset.g; buildHist(currentG);
+});
+
+window.addEventListener('resize',()=>{mapChart&&mapChart.resize();donutChart.resize();histChart.resize();});
+
+// load world geojson (CORS-enabled CDN), with fallback mirror
+const MAPS=[
+  'https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json',
+  'https://fastly.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json'
+];
+(async()=>{
+  for(const u of MAPS){
+    try{ const r=await fetch(u); if(r.ok){ boot(await r.json()); return; } }catch(e){}
+  }
+  document.getElementById('map').innerHTML='<div style="display:grid;place-items:center;height:100%;font-family:'+C.mono+';color:'+C.txt3+';font-size:12px;text-align:center;padding:20px">World basemap needs network access to load.<br/>(ECharts world GeoJSON via CDN)</div>';
+})();
+</script>
+</body>
+</html>
