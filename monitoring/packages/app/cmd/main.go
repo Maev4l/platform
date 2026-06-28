@@ -97,18 +97,20 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 
 	// 3. GeoIP — auto-update at startup (default on), then open; tolerate no DB.
-	// When credentials are absent or the download fails the binary keeps running
-	// with an empty resolver; the world view still works off c-country.
-	if cfg.GeoIPAutoUpdate && cfg.GeoIPLicenseKey != "" {
-		if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
-			log.Warn().Err(err).Msg("geoip update failed; using existing DB if present")
-		}
+	// The geo map resolves IPs via this DB, so without it the map is empty
+	// (KPIs/histogram still work). Log the state clearly either way.
+	if !cfg.GeoIPAutoUpdate || cfg.GeoIPLicenseKey == "" {
+		log.Warn().Bool("autoUpdate", cfg.GeoIPAutoUpdate).Bool("licenseKeySet", cfg.GeoIPLicenseKey != "").
+			Msg("geoip auto-update skipped (need GEOIP_AUTO_UPDATE=true + GEOIP_LICENSE_KEY); will use an existing DB if present")
+	} else if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
+		log.Warn().Err(err).Msg("geoip download failed; will use an existing DB if present")
 	}
 	resolver := geo.New()
 	if r, err := geo.Open(cfg.GeoIPPath); err != nil {
-		log.Warn().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip DB unavailable; country drill-down disabled")
+		log.Warn().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip DB NOT loaded → the world map will be empty; set GEOIP_LICENSE_KEY or place a .mmdb at GEOIP_DB_PATH")
 	} else {
 		resolver = r
+		log.Info().Str("path", cfg.GeoIPPath).Msg("geoip database loaded")
 	}
 	defer resolver.Close()
 
