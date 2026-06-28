@@ -45,9 +45,12 @@ unchanged. Startup-only (no background refresh). Used only for the country
 drill-down — the world view uses `c-country`, so the app runs fine without it.
 
 ## Build / run (from monitoring/)
-- `make backend-build` — build SPA, embed it, build the binary
-- `make frontend-serve` — Vite dev server (proxies /api → 127.0.0.1:8080)
-- `make backend-run` — run the Go server locally (dev)
+- `make run` — **one command to run the app**: builds the SPA, embeds it, builds
+  the binary, and runs it (real UI, auto-port, opens the browser). Loads
+  `packages/app/.env`.
+- `make backend-build` — build SPA, embed it, build the binary (no run)
+- Hot-reload dev (two terminals): `make backend-run` (API on :8080) +
+  `make frontend-serve` (Vite on :5180, proxies /api → :8080); open :5180.
 - `make infra-plan` / `make infra-apply` / `make infra-output`
 
 ## Constraints

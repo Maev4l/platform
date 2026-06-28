@@ -1,9 +1,21 @@
-.PHONY: backend-build backend-run frontend-build frontend-serve \
+.PHONY: run backend-build backend-run frontend-build frontend-serve \
         infra-plan infra-apply infra-output
 
 INFRA := packages/infrastructure
 APP    := packages/app
 WEB    := packages/web
+
+# One command to run the whole app: build the SPA, embed it, build the binary,
+# then run it (serves the real UI on an auto-selected port and opens the browser).
+# The SPA is baked into the binary, so the on-disk build artifacts are restored to
+# a clean git tree right after building — the running binary still serves the UI.
+# Loads packages/app/.env and falls back to the terraform log_sources_env output.
+run: backend-build
+	@git checkout -- $(APP)/internal/web/dist/index.html 2>/dev/null || true
+	@rm -rf $(APP)/internal/web/dist/assets
+	@cd $(APP) && set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+	  if [ -z "$$LOG_SOURCES" ]; then export LOG_SOURCES=$$(terraform -chdir=../infrastructure output -raw log_sources_env 2>/dev/null); fi; \
+	  ./bin/monitoring
 
 # Build the SPA, embed it into the Go module, build the binary.
 backend-build: frontend-build
