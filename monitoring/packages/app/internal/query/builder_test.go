@@ -32,6 +32,26 @@ func TestAccessRejectsBadGroupBy(t *testing.T) {
 	}
 }
 
+func TestGeoCountries(t *testing.T) {
+	sql, args := GeoCountries("t", "2026-06-01", "2026-06-27")
+	if !strings.Contains(sql, `"c_country" AS country`) || !strings.Contains(strings.ToLower(sql), "group by") {
+		t.Fatalf("bad sql: %s", sql)
+	}
+	if !strings.Contains(sql, "BETWEEN 20260601 AND 20260627") || len(args) != 0 {
+		t.Fatalf("bad bounds/args: %s %v", sql, args)
+	}
+}
+
+func TestGeoIPsFiltersCountry(t *testing.T) {
+	sql, args := GeoIPs("t", "2026-06-01", "2026-06-27", "FR")
+	if !strings.Contains(sql, `"c_country" = ?`) || !strings.Contains(sql, `"c_ip" AS ip`) {
+		t.Fatalf("bad sql: %s", sql)
+	}
+	if len(args) != 1 || args[0] != "FR" {
+		t.Fatalf("bad args: %v", args)
+	}
+}
+
 func TestGeoAllIPs(t *testing.T) {
 	sql, args := GeoAllIPs("t", "2026-06-01", "2026-06-27")
 	if !strings.Contains(sql, `"c_ip" AS ip`) || !strings.Contains(strings.ToLower(sql), "group by") {

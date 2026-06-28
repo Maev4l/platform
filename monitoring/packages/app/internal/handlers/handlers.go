@@ -120,19 +120,31 @@ func (a *API) geo(c *gin.Context) {
 		return
 	}
 	country := c.Query("country")
-	// Both views resolve the client IP to a country via MaxMind (the c-country
-	// log field is unpopulated for these sources). Single underlying query.
-	sql, args := query.GeoAllIPs(src.Table, from, to)
 	if country == "" {
-		// World view: aggregate request counts + distinct IPs by resolved country.
+		// World view: prefer CloudFront's c_country (cheap); if it's unpopulated
+		// (no rows), fall back to resolving each IP's country via MaxMind.
+		cSQL, cArgs := query.GeoCountries(src.Table, from, to)
+		allSQL, allArgs := query.GeoAllIPs(src.Table, from, to)
 		a.cached(c, "geoW|"+src.Name+"|"+from+"|"+to, func(ctx context.Context) (any, error) {
-			rows, err := a.Q.Query(ctx, sql, args)
+			rows, err := a.Q.Query(ctx, cSQL, cArgs)
+			if err != nil {
+				return nil, err
+			}
+			if len(rows) > 0 {
+				out := make([]gin.H, 0, len(rows))
+				for _, r := range rows {
+					out = append(out, gin.H{"country": r["country"], "callers": atoi(r["callers"]), "ips": atoi(r["ips"])})
+				}
+				return gin.H{"level": "world", "countries": out}, nil
+			}
+			// Fallback: aggregate requests + distinct IPs by MaxMind-resolved country.
+			ipRows, err := a.Q.Query(ctx, allSQL, allArgs)
 			if err != nil {
 				return nil, err
 			}
 			type agg struct{ callers, ips int }
 			m := map[string]*agg{}
-			for _, r := range rows {
+			for _, r := range ipRows {
 				loc, found := a.Geo.Lookup(r["ip"])
 				if !found || loc.Country == "" {
 					continue
@@ -153,22 +165,43 @@ func (a *API) geo(c *gin.Context) {
 		})
 		return
 	}
-	// Country drill-down: keep IPs resolving to the selected country, with coords.
+	// Country drill-down: prefer the c_country-filtered IPs; if none (c_country
+	// unpopulated), fall back to all IPs filtered by MaxMind-resolved country.
+	cSQL, cArgs := query.GeoIPs(src.Table, from, to, country)
+	allSQL, allArgs := query.GeoAllIPs(src.Table, from, to)
 	a.cached(c, "geoC|"+src.Name+"|"+from+"|"+to+"|"+country, func(ctx context.Context) (any, error) {
-		rows, err := a.Q.Query(ctx, sql, args)
+		rows, err := a.Q.Query(ctx, cSQL, cArgs)
 		if err != nil {
 			return nil, err
 		}
-		points := make([]gin.H, 0)
-		for _, r := range rows {
-			loc, found := a.Geo.Lookup(r["ip"])
-			if !found || loc.Country != country || (loc.Lat == 0 && loc.Lng == 0) {
-				continue
-			}
-			points = append(points, gin.H{"ip": r["ip"], "city": loc.City, "lat": loc.Lat, "lng": loc.Lng, "requests": atoi(r["requests"])})
+		if len(rows) > 0 {
+			// c_country path: IPs are already in `country`; just need coords.
+			return gin.H{"level": "country", "country": country, "points": a.resolvePoints(rows, "")}, nil
 		}
-		return gin.H{"level": "country", "country": country, "points": points}, nil
+		ipRows, err := a.Q.Query(ctx, allSQL, allArgs)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"level": "country", "country": country, "points": a.resolvePoints(ipRows, country)}, nil
 	})
+}
+
+// resolvePoints turns {ip,requests} rows into geo map points via MaxMind,
+// skipping IPs with no coordinates. When filterCountry != "", only IPs that
+// MaxMind resolves to that country are kept.
+func (a *API) resolvePoints(rows []map[string]string, filterCountry string) []gin.H {
+	points := make([]gin.H, 0, len(rows))
+	for _, r := range rows {
+		loc, found := a.Geo.Lookup(r["ip"])
+		if !found || (loc.Lat == 0 && loc.Lng == 0) {
+			continue
+		}
+		if filterCountry != "" && loc.Country != filterCountry {
+			continue
+		}
+		points = append(points, gin.H{"ip": r["ip"], "city": loc.City, "lat": loc.Lat, "lng": loc.Lng, "requests": atoi(r["requests"])})
+	}
+	return points
 }
 
 // summary returns aggregate stats and top URIs for the given source and date range.

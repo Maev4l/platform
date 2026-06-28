@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"isnan.eu/monitoring/internal/athena"
 	"isnan.eu/monitoring/internal/cache"
 	"isnan.eu/monitoring/internal/config"
 	"isnan.eu/monitoring/internal/geo"
@@ -18,6 +20,35 @@ type fakeQ struct{ rows []map[string]string }
 
 func (f fakeQ) Query(context.Context, string, []string) ([]map[string]string, error) {
 	return f.rows, nil
+}
+
+// routeQ returns different rows depending on which query the handler runs, so
+// the c_country-first / IP-fallback branches can be exercised.
+type routeQ struct {
+	countries []map[string]string // GeoCountries (world, "AS country")
+	geoIPs    []map[string]string // GeoIPs (drill, "c_country = ?")
+	allIPs    []map[string]string // GeoAllIPs (fallback, "AS ip")
+}
+
+func (q routeQ) Query(_ context.Context, sql string, _ []string) ([]map[string]string, error) {
+	switch {
+	case strings.Contains(sql, `"c_country" = ?`):
+		return q.geoIPs, nil
+	case strings.Contains(sql, "AS country"):
+		return q.countries, nil
+	case strings.Contains(sql, "AS ip"):
+		return q.allIPs, nil
+	}
+	return nil, nil
+}
+
+func newAPIQ(q athena.Querier) *API {
+	return &API{
+		Cfg:   &config.Config{Sources: map[string]config.Source{"bl-site": {Name: "bl-site", Table: "bl_site"}}},
+		Q:     q,
+		Geo:   fakeGeo{},
+		Cache: cache.New(time.Minute),
+	}
 }
 
 type fakeGeo struct{}
@@ -66,32 +97,46 @@ func TestBadDate400(t *testing.T) {
 	}
 }
 
-func TestGeoWorld(t *testing.T) {
-	// World view aggregates per-IP rows by the MaxMind-resolved country (fakeGeo
-	// resolves every IP to FR), summing requests and counting distinct IPs.
-	rows := []map[string]string{
-		{"ip": "1.2.3.4", "requests": "9000"},
-		{"ip": "5.6.7.8", "requests": "241"},
+type worldResp struct {
+	Level     string `json:"level"`
+	Countries []struct {
+		Country string `json:"country"`
+		Callers int    `json:"callers"`
+		IPs     int    `json:"ips"`
+	} `json:"countries"`
+}
+
+func TestGeoWorldFromCountryField(t *testing.T) {
+	// c_country populated → world uses it directly (no IP resolution).
+	q := routeQ{countries: []map[string]string{{"country": "FR", "callers": "200", "ips": "5"}}}
+	w := do(newAPIQ(q), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27")
+	var got worldResp
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if got.Level != "world" || len(got.Countries) != 1 || got.Countries[0].Country != "FR" ||
+		got.Countries[0].Callers != 200 || got.Countries[0].IPs != 5 {
+		t.Fatalf("bad world (c_country): %+v", got)
 	}
-	w := do(newAPI(rows), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27")
-	var got struct {
-		Level     string `json:"level"`
-		Countries []struct {
-			Country string `json:"country"`
-			Callers int    `json:"callers"`
-			IPs     int    `json:"ips"`
-		} `json:"countries"`
+}
+
+func TestGeoWorldIPFallback(t *testing.T) {
+	// c_country empty → fall back to MaxMind-resolved aggregation (fakeGeo → FR).
+	q := routeQ{
+		countries: []map[string]string{},
+		allIPs:    []map[string]string{{"ip": "1.2.3.4", "requests": "9000"}, {"ip": "5.6.7.8", "requests": "241"}},
 	}
+	w := do(newAPIQ(q), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27")
+	var got worldResp
 	json.Unmarshal(w.Body.Bytes(), &got)
 	if got.Level != "world" || len(got.Countries) != 1 || got.Countries[0].Country != "FR" ||
 		got.Countries[0].Callers != 9241 || got.Countries[0].IPs != 2 {
-		t.Fatalf("bad world: %+v", got)
+		t.Fatalf("bad world (ip fallback): %+v", got)
 	}
 }
 
 func TestGeoDrilldown(t *testing.T) {
-	rows := []map[string]string{{"ip": "92.184.105.12", "requests": "842"}}
-	w := do(newAPI(rows), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27&country=FR")
+	// c_country path: GeoIPs returns IPs already in the country; resolve coords.
+	q := routeQ{geoIPs: []map[string]string{{"ip": "92.184.105.12", "requests": "842"}}}
+	w := do(newAPIQ(q), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27&country=FR")
 	var got struct {
 		Level  string `json:"level"`
 		Points []struct {
@@ -100,7 +145,7 @@ func TestGeoDrilldown(t *testing.T) {
 		} `json:"points"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &got)
-	if got.Level != "country" || got.Points[0].City != "Paris" || got.Points[0].Lat != 48.85 {
+	if got.Level != "country" || len(got.Points) != 1 || got.Points[0].City != "Paris" || got.Points[0].Lat != 48.85 {
 		t.Fatalf("bad drilldown: %+v", got)
 	}
 }

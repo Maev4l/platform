@@ -13,10 +13,11 @@ var ErrBadGroupBy = errors.New("invalid groupBy")
 // cs_method, cs_protocol, cs_Host, cs_uri_stem, cs_uri_query, sc_status,
 // x_edge_result_type, x_edge_location, cs_User_Agent.
 const (
-	colDate   = `"date"`
-	colIP     = `"c_ip"`
-	colStatus = `"sc_status"`
-	colURI    = `"cs_uri_stem"`
+	colDate    = `"date"`
+	colIP      = `"c_ip"`
+	colCountry = `"c_country"`
+	colStatus  = `"sc_status"`
+	colURI     = `"cs_uri_stem"`
 )
 
 // partKey converts a validated YYYY-MM-DD date to the integer composite key
@@ -53,6 +54,32 @@ WHERE %s
 GROUP BY 1
 ORDER BY 1`, groupBy, colDate, colStatus, colStatus, colStatus, colStatus, table, partitionPredicate(from, to))
 	return sql, nil, nil
+}
+
+// GeoCountries aggregates callers + distinct IPs by the CloudFront-provided
+// c_country (cheap, no MaxMind). The handler uses this first and falls back to
+// IP geolocation only when it returns nothing (c_country unpopulated).
+func GeoCountries(table, from, to string) (string, []string) {
+	sql := fmt.Sprintf(`
+SELECT %s AS country, count(*) AS callers, count(DISTINCT %s) AS ips
+FROM %q
+WHERE %s AND %s <> ''
+GROUP BY 1
+ORDER BY callers DESC`, colCountry, colIP, table, partitionPredicate(from, to), colCountry)
+	return sql, nil
+}
+
+// GeoIPs aggregates request counts per IP for one c_country (drill-down when
+// c_country is populated). The handler resolves each IP's coords via MaxMind.
+func GeoIPs(table, from, to, country string) (string, []string) {
+	sql := fmt.Sprintf(`
+SELECT %s AS ip, count(*) AS requests
+FROM %q
+WHERE %s AND %s = ?
+GROUP BY 1
+ORDER BY requests DESC
+LIMIT 5000`, colIP, table, partitionPredicate(from, to), colCountry)
+	return sql, []string{country}
 }
 
 // GeoAllIPs aggregates request counts per client IP across the whole range
