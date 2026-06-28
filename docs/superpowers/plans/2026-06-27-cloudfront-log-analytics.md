@@ -351,7 +351,7 @@ func TestLoadDefaultsAndSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Region != "eu-central-1" || c.Database != "monitoring" || c.Workgroup != "monitoring" {
+	if c.Region != "eu-central-1" || c.Database != "platform-monitoring" || c.Workgroup != "platform-monitoring" {
 		t.Fatalf("bad defaults: %+v", c)
 	}
 	if s, ok := c.Source("bl-site"); !ok || s.Table != "bl_site" {
@@ -426,8 +426,8 @@ func Load() (*Config, error) {
 
 	_ = k.Load(confmap.Provider(map[string]interface{}{
 		"region":     "eu-central-1",
-		"database":   "monitoring",
-		"workgroup":  "monitoring",
+		"database":   "platform-monitoring",
+		"workgroup":  "platform-monitoring",
 		"geoip_path": "./GeoLite2-City.mmdb",
 	}, "."), nil)
 
@@ -1873,7 +1873,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
 
 ```hcl
 resource "aws_athena_workgroup" "monitoring" {
-  name          = "monitoring"
+  name          = "platform-monitoring"
   force_destroy = true
 
   configuration {
@@ -1913,7 +1913,7 @@ git commit -m "feat(monitoring): athena workgroup + results bucket"
 
 ```hcl
 resource "aws_glue_catalog_database" "monitoring" {
-  name = "monitoring"
+  name = "platform-monitoring"
 }
 
 resource "aws_glue_catalog_table" "source" {
@@ -2005,8 +2005,8 @@ These require the operator's IAM Identity Center credentials and a real log buck
 2. `terraform -chdir=monitoring/packages/infrastructure init && terraform -chdir=monitoring/packages/infrastructure apply -auto-approve` — creates the database, workgroup, results bucket, and one table per source.
 3. Confirm partition projection + the real Parquet column names with a one-row query:
    ```bash
-   aws athena start-query-execution --work-group monitoring \
-     --query-execution-context Database=monitoring \
+   aws athena start-query-execution --work-group platform-monitoring \
+     --query-execution-context Database=platform-monitoring \
      --query-string 'SELECT * FROM <table> WHERE year='\''2026'\'' AND month='\''06'\'' AND day='\''27'\'' LIMIT 1'
    # aws athena get-query-results --query-execution-id <id>
    ```

@@ -12,7 +12,7 @@ func TestLoadDefaultsAndSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Region != "eu-central-1" || c.Database != "monitoring" || c.Workgroup != "monitoring" {
+	if c.Region != "eu-central-1" || c.Database != "platform-monitoring" || c.Workgroup != "platform-monitoring" {
 		t.Fatalf("bad defaults: %+v", c)
 	}
 	if s, ok := c.Source("bl-site"); !ok || s.Table != "bl_site" {

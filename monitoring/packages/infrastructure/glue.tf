@@ -1,5 +1,5 @@
 resource "aws_glue_catalog_database" "monitoring" {
-  name = "monitoring"
+  name = "platform-monitoring"
 }
 
 resource "aws_glue_catalog_table" "source" {

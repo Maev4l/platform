@@ -167,7 +167,7 @@ The cloud footprint is just the data layer (no compute, no CDN, no auth infra):
 - **Glue Data Catalog:** database `monitoring` + one table per log source
   (`for_each` over `{name, bucket, prefix}`), Parquet SerDe, partition projection
   on `year/month/day`. No crawler, no ETL.
-- **Athena workgroup** `monitoring` with a results bucket
+- **Athena workgroup** `platform-monitoring` (Glue DB likewise `platform-monitoring`) with a results bucket
   `<account-id>-monitoring-athena-results` (`force_destroy = true`) and a
   bytes-scanned cutoff per query.
 - Adding a source = one entry in `var.log_sources` + `terraform apply`.

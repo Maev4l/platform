@@ -42,8 +42,8 @@ func Load() (*Config, error) {
 	// and env (in-memory) providers have no I/O and cannot realistically fail.
 	_ = k.Load(confmap.Provider(map[string]any{
 		"region":     "eu-central-1",
-		"database":   "monitoring",
-		"workgroup":  "monitoring",
+		"database":   "platform-monitoring",
+		"workgroup":  "platform-monitoring",
 		"geoip_path": "./GeoLite2-City.mmdb",
 	}, "."), nil)
 

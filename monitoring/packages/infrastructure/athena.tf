@@ -1,5 +1,5 @@
 resource "aws_athena_workgroup" "monitoring" {
-  name          = "monitoring"
+  name          = "platform-monitoring"
   force_destroy = true
 
   configuration {
