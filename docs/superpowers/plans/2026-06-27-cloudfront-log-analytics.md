@@ -18,7 +18,7 @@
 - **No AWS CLI dependency:** SSO login is implemented natively via `ssooidc`/`sso`.
 - **Data window:** logs have a 90-day S3 expiry; all queries bounded to the last 90 days. Day is the finest granularity.
 - **No root `package.json`** under `monitoring/` — only `packages/web/`. Makefile uses hyphenated targets (Make forbids `:`).
-- **Spec:** `docs/superpowers/specs/2026-06-27-cloudfront-log-analytics-design.md`. **UI reference (canonical):** `docs/ui-design/index.html`.
+- **Spec:** `docs/superpowers/specs/2026-06-27-cloudfront-log-analytics-design.md`. **UI reference (canonical):** `docs/ui-design/monitoring.html`.
 
 ---
 
@@ -1779,7 +1779,7 @@ terraform {
   }
   backend "s3" {
     bucket       = "global-tf-states"
-    key          = "platform/monitoring.tfstate"
+    key          = "platform-monitoring/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true
   }
@@ -2364,7 +2364,7 @@ git commit -m "feat(monitoring): api client + app shell (header, KPIs)"
 **Files:**
 - Create: `monitoring/packages/web/src/lib/world.js`, `src/components/GeoMap.jsx`
 
-**Reference:** port the ECharts options from `docs/ui-design/index.html` (`worldOption`, `franceOption`, drill click handler).
+**Reference:** port the ECharts options from `docs/ui-design/monitoring.html` (`worldOption`, `franceOption`, drill click handler).
 
 - [ ] **Step 1: world.js**
 

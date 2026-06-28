@@ -8,7 +8,7 @@ terraform {
   }
   backend "s3" {
     bucket       = "global-tf-states"
-    key          = "platform/monitoring.tfstate"
+    key          = "platform-monitoring/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true
   }

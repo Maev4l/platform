@@ -140,7 +140,7 @@ login at process start); the API client calls same-origin `/api/*` with no token
 
 ### Approved visual direction
 
-Canonical mockup: **`docs/ui-design/index.html`**. The React build reproduces it.
+Canonical mockup: **`docs/ui-design/monitoring.html`**. The React build reproduces it.
 
 - **Aesthetic — "tactical telemetry console":** near-black obsidian base, faint
   tactical grid + grain, corner-tick panel framing.
