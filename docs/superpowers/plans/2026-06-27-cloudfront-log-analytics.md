@@ -1760,9 +1760,11 @@ git commit -m "feat(monitoring): wire SSO login → Athena → server → browse
 ## Task 10: Terraform skeleton
 
 **Files:**
-- Create: `monitoring/packages/infrastructure/main.tf`, `provider.tf`, `variables.tf`, `outputs.tf`
+- Create: `monitoring/packages/infrastructure/main.tf`, `provider.tf`, `variables.tf`
 
 **Interfaces:** `local.account_id`; `var.region`; `var.log_sources` (map of `{bucket,prefix}`).
+
+**Note:** `outputs.tf` is created in Task 12 (its outputs reference the Athena workgroup and Glue DB defined in Tasks 11–12). No `terraform validate` at this task — the first validate runs in Task 11. The S3 backend + `apply` need live AWS credentials and are **operator actions**, not run by the implementer.
 
 - [ ] **Step 1: main.tf**
 
@@ -1826,24 +1828,7 @@ variable "log_sources" {
 }
 ```
 
-- [ ] **Step 4: outputs.tf**
-
-```hcl
-output "athena_workgroup" {
-  value = aws_athena_workgroup.monitoring.name
-}
-
-output "athena_database" {
-  value = aws_glue_catalog_database.monitoring.name
-}
-
-# Convenience: the LOG_SOURCES JSON the binary expects (name -> sanitized table).
-output "log_sources_env" {
-  value = jsonencode([for name, _ in var.log_sources : { name = name, table = replace(name, "-", "_") }])
-}
-```
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add monitoring/packages/infrastructure
@@ -1903,10 +1888,10 @@ resource "aws_athena_workgroup" "monitoring" {
 }
 ```
 
-- [ ] **Step 3: Validate**
+- [ ] **Step 3: Validate (offline — no backend/creds)**
 
-Run: `terraform -chdir=monitoring/packages/infrastructure init && terraform -chdir=monitoring/packages/infrastructure validate`
-Expected: valid.
+Run: `terraform -chdir=monitoring/packages/infrastructure init -backend=false && terraform -chdir=monitoring/packages/infrastructure validate`
+Expected: `Success! The configuration is valid.` (`-backend=false` skips the S3 backend so no AWS credentials are needed just to validate. `outputs.tf` does not exist yet, so there are no dangling references.)
 
 - [ ] **Step 4: Commit**
 
@@ -1983,32 +1968,49 @@ resource "aws_glue_catalog_table" "source" {
 }
 ```
 
-- [ ] **Step 2: Add a real source + apply**
+- [ ] **Step 2: outputs.tf** (now that the workgroup + Glue DB exist)
 
-Set `var.log_sources` (in a `terraform.tfvars` or the default map) to a source whose bucket you control, then:
+```hcl
+output "athena_workgroup" {
+  value = aws_athena_workgroup.monitoring.name
+}
 
-```bash
-terraform -chdir=monitoring/packages/infrastructure validate
-terraform -chdir=monitoring/packages/infrastructure apply -auto-approve
+output "athena_database" {
+  value = aws_glue_catalog_database.monitoring.name
+}
+
+# Convenience: the LOG_SOURCES JSON the binary expects (name -> sanitized table).
+output "log_sources_env" {
+  value = jsonencode([for name, _ in var.log_sources : { name = name, table = replace(name, "-", "_") }])
+}
 ```
-Expected: database, workgroup, results bucket, and one table per source created.
 
-- [ ] **Step 3: Confirm partition projection + column names**
+- [ ] **Step 3: Validate (offline)**
 
-```bash
-aws athena start-query-execution --work-group monitoring \
-  --query-execution-context Database=monitoring \
-  --query-string 'SELECT * FROM <table> WHERE year='\''2026'\'' AND month='\''06'\'' AND day='\''27'\'' LIMIT 1'
-# aws athena get-query-results --query-execution-id <id>
-```
-Inspect the returned column names; if any differ from `glue.tf`, fix `glue.tf` + `query/builder.go` constants, re-apply, re-run.
+Run: `terraform -chdir=monitoring/packages/infrastructure init -backend=false && terraform -chdir=monitoring/packages/infrastructure validate`
+Expected: `Success! The configuration is valid.` (All output references now resolve.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add monitoring/packages/infrastructure/glue.tf
-git commit -m "feat(monitoring): glue db + per-source tables (partition projection)"
+git add monitoring/packages/infrastructure/glue.tf monitoring/packages/infrastructure/outputs.tf
+git commit -m "feat(monitoring): glue db + per-source tables + outputs"
 ```
+
+- [ ] **Step 5: OPERATOR STEPS (not run by the implementer — need live AWS creds)**
+
+These require the operator's IAM Identity Center credentials and a real log bucket; the implementer stops after Step 4 and records them here for the operator:
+
+1. Set `var.log_sources` (in `terraform.tfvars` or the default map) to a source whose bucket you control.
+2. `terraform -chdir=monitoring/packages/infrastructure init && terraform -chdir=monitoring/packages/infrastructure apply -auto-approve` — creates the database, workgroup, results bucket, and one table per source.
+3. Confirm partition projection + the real Parquet column names with a one-row query:
+   ```bash
+   aws athena start-query-execution --work-group monitoring \
+     --query-execution-context Database=monitoring \
+     --query-string 'SELECT * FROM <table> WHERE year='\''2026'\'' AND month='\''06'\'' AND day='\''27'\'' LIMIT 1'
+   # aws athena get-query-results --query-execution-id <id>
+   ```
+   If any column name differs from `glue.tf`, fix `glue.tf` + `query/builder.go` constants together, re-apply, re-run.
 
 ---
 
