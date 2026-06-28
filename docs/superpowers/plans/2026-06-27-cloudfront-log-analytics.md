@@ -1948,18 +1948,18 @@ resource "aws_glue_catalog_table" "source" {
 
     columns { name = "date"               type = "string" }
     columns { name = "time"               type = "string" }
-    columns { name = "c-ip"               type = "string" }
-    columns { name = "c-country"          type = "string" }
+    columns { name = "c_ip"               type = "string" }
+    columns { name = "c_country"          type = "string" }
     columns { name = "asn"                type = "string" }
-    columns { name = "cs-method"          type = "string" }
-    columns { name = "cs-protocol"        type = "string" }
-    columns { name = "cs-host"            type = "string" }
-    columns { name = "cs-uri-stem"        type = "string" }
-    columns { name = "cs-uri-query"       type = "string" }
-    columns { name = "sc-status"          type = "string" }
-    columns { name = "x-edge-result-type" type = "string" }
-    columns { name = "x-edge-location"    type = "string" }
-    columns { name = "cs-user-agent"      type = "string" }
+    columns { name = "cs_method"          type = "string" }
+    columns { name = "cs_protocol"        type = "string" }
+    columns { name = "cs_host"            type = "string" }
+    columns { name = "cs_uri_stem"        type = "string" }
+    columns { name = "cs_uri_query"       type = "string" }
+    columns { name = "sc_status"          type = "string" }
+    columns { name = "x_edge_result_type" type = "string" }
+    columns { name = "x_edge_location"    type = "string" }
+    columns { name = "cs_user_agent"      type = "string" }
   }
 
   partition_keys { name = "year"  type = "string" }
