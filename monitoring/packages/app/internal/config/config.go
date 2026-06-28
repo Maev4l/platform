@@ -38,7 +38,9 @@ func Load() (*Config, error) {
 	k := koanf.New(".")
 
 	// Layer 1: hard-coded defaults so every key has a baseline value.
-	_ = k.Load(confmap.Provider(map[string]interface{}{
+	// Errors are ignored on these Load calls: the confmap (static literal map)
+	// and env (in-memory) providers have no I/O and cannot realistically fail.
+	_ = k.Load(confmap.Provider(map[string]any{
 		"region":     "eu-central-1",
 		"database":   "monitoring",
 		"workgroup":  "monitoring",
