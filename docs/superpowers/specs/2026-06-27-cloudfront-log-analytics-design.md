@@ -105,17 +105,19 @@ Single binary, module `isnan.eu/monitoring`. Internal packages:
   role name) from flags/env. **No AWS CLI dependency.**
 - `internal/config` — env: `REGION`, `ATHENA_DATABASE`, `ATHENA_WORKGROUP`,
   `GEOIP_DB_PATH` (local `.mmdb`, default `./GeoLite2-City.mmdb` — process CWD),
-  `GEOIP_LICENSE_KEY`, `GEOIP_AUTO_UPDATE` (default true), `LOG_SOURCES`
-  (JSON `[{name,table}]`).
-- `internal/geo` — MaxMind resolver **with auto-update** (default on): on
-  startup downloads `GeoLite2-City` to `GEOIP_DB_PATH` if missing or stale
+  `GEOIP_ACCOUNT_ID`, `GEOIP_LICENSE_KEY`, `GEOIP_AUTO_UPDATE` (default true),
+  `LOG_SOURCES` (JSON `[{name,table}]`). A gitignored `.env` (template
+  `.env.example`) supplies these for `make run`.
+- `internal/geo` — MaxMind resolver **with startup auto-update** (default on):
+  at launch it downloads `GeoLite2-City` to `GEOIP_DB_PATH` if missing or stale
   (compares MaxMind's published `tar.gz.sha256` against a stored sidecar — no
-  re-download when unchanged), then a 24h background ticker refreshes and
-  **hot-swaps** the in-memory reader (RWMutex-guarded). No external `geoipupdate`
-  binary. Auto-update needs only `GEOIP_LICENSE_KEY`; with no key (or on download
-  failure) it falls back to any existing file, and with no DB at all the
-  country drill-down simply returns no points (world view still works off
-  `c-country`).
+  re-download when unchanged), then opens it. **Startup-only — no background
+  refresh.** No external `geoipupdate` binary. Download auth: `GEOIP_ACCOUNT_ID`
+  + `GEOIP_LICENSE_KEY` via HTTP basic auth (MaxMind's current method), falling
+  back to the license-key-only permalink when no account id is set. With no
+  credentials (or on download failure) it uses any existing file; with no DB at
+  all the country drill-down simply returns no points (world view still works
+  off `c-country`).
 - `internal/query` — parameterized, partition-pruned SQL builders.
 - `internal/athena` — start → poll → fetch wrapper (`Querier` interface).
 - `internal/geo` — MaxMind GeoLite2 City resolver (`Resolver` interface).

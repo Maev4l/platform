@@ -6,10 +6,13 @@ BIN_DIR := bin
 build:
 	go build -ldflags="-s -w" -o $(BIN_DIR)/monitoring ./cmd
 
-# Dev: fixed port so Vite's /api proxy (127.0.0.1:8080) matches. The built
-# binary (no --addr) auto-selects a free port instead.
+# Dev: load .env (gitignored config) if present, fall back to the terraform
+# log_sources_env output for LOG_SOURCES, then serve on the fixed port Vite's
+# /api proxy expects (127.0.0.1:8080). The built binary (no --addr) auto-selects.
 run:
-	go run ./cmd --addr 127.0.0.1:8080
+	@set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+	  if [ -z "$$LOG_SOURCES" ]; then export LOG_SOURCES=$$(terraform -chdir=../infrastructure output -raw log_sources_env 2>/dev/null); fi; \
+	  go run ./cmd --addr 127.0.0.1:8080
 
 test:
 	go test ./...
