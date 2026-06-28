@@ -3,6 +3,9 @@ import * as echarts from 'echarts';
 let registered = false;
 export const ensureWorld = async () => {
   if (registered) return;
+  // registered stays false until registerMap succeeds — a failed fetch leaves it false
+  // so the caller can retry on the next mount, and the thrown error propagates to the
+  // caller's .catch (added in GeoMap) for clean error reporting.
   const res = await fetch('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json');
   echarts.registerMap('world', await res.json());
   registered = true;

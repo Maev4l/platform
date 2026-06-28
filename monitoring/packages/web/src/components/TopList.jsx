@@ -10,7 +10,9 @@ export const TopList = ({ state, summary }) => {
     if (state.country) {
       setTitle(`Top Callers · ${state.country}`);
       api('/api/geo', { source: state.source, from: state.from, to: state.to, country: state.country })
-        .then((d) => setItems(d.points.slice(0, 12).map((p) => ({ label: p.ip, sub: p.city, n: p.requests }))));
+        // Guard against missing points array (e.g. empty/malformed API response)
+        .then((d) => setItems((d?.points ?? []).slice(0, 12).map((p) => ({ label: p.ip, sub: p.city, n: p.requests }))))
+        .catch((err) => console.error('geo drill fetch failed', err));
     } else {
       setTitle('Top URIs');
       setItems((summary?.topUris ?? []).map((u) => ({ label: u.uri, sub: '', n: u.hits })));

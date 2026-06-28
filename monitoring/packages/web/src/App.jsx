@@ -17,15 +17,21 @@ export default function App() {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    api('/api/sources').then((s) => {
-      setSources(s);
-      setState((st) => ({ ...st, source: st.source || s[0] || '' }));
-    });
+    api('/api/sources')
+      .then((s) => {
+        // Guard against non-array responses (e.g. unexpected API shape on error)
+        const arr = Array.isArray(s) ? s : [];
+        setSources(arr);
+        setState((st) => ({ ...st, source: st.source || arr[0] || '' }));
+      })
+      .catch((err) => console.error('sources fetch failed', err));
   }, []);
 
   useEffect(() => {
     if (!state.source) return;
-    api('/api/summary', { source: state.source, from: state.from, to: state.to }).then(setSummary);
+    api('/api/summary', { source: state.source, from: state.from, to: state.to })
+      .then(setSummary)
+      .catch((err) => console.error('summary fetch failed', err));
   }, [state.source, state.from, state.to]);
 
   return (

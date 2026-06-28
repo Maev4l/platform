@@ -52,15 +52,23 @@ export const GeoMap = ({ state, setState }) => {
     if (loading || !state.source) return;
     const c = chart.current;
     if (!state.country) {
-      api('/api/geo', { source: state.source, from: state.from, to: state.to }).then((d) => {
-        const data = d.countries.filter((x) => CENTROIDS[x.country]).map((x) => ({ name: CENTROIDS[x.country].name, code: x.country, value: [...CENTROIDS[x.country].coord, x.callers] }));
-        c.setOption(worldOption(data), true);
-      });
+      api('/api/geo', { source: state.source, from: state.from, to: state.to })
+        .then((d) => {
+          // Guard against missing countries array and a disposed chart on fast unmount
+          if (!c || c.isDisposed()) return;
+          const data = (d?.countries ?? []).filter((x) => CENTROIDS[x.country]).map((x) => ({ name: CENTROIDS[x.country].name, code: x.country, value: [...CENTROIDS[x.country].coord, x.callers] }));
+          c.setOption(worldOption(data), true);
+        })
+        .catch((err) => console.error('geo world fetch failed', err));
     } else {
-      api('/api/geo', { source: state.source, from: state.from, to: state.to, country: state.country }).then((d) => {
-        const data = d.points.map((p) => ({ name: `${p.city} · ${p.ip}`, value: [p.lng, p.lat, p.requests] }));
-        c.setOption(countryOption(data, CENTROIDS[state.country]?.coord || [0, 20]), true);
-      });
+      api('/api/geo', { source: state.source, from: state.from, to: state.to, country: state.country })
+        .then((d) => {
+          // Guard against missing points array and a disposed chart on fast unmount
+          if (!c || c.isDisposed()) return;
+          const data = (d?.points ?? []).map((p) => ({ name: `${p.city} · ${p.ip}`, value: [p.lng, p.lat, p.requests] }));
+          c.setOption(countryOption(data, CENTROIDS[state.country]?.coord || [0, 20]), true);
+        })
+        .catch((err) => console.error('geo drill fetch failed', err));
     }
   }, [loading, state.source, state.from, state.to, state.country]);
 

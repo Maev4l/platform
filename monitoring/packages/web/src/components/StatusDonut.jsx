@@ -14,6 +14,8 @@ export const StatusDonut = ({ summary }) => {
 
   useEffect(() => {
     if (!summary) return;
+    // Guard against a disposed chart if the component unmounted while summary was being set
+    if (!chart.current || chart.current.isDisposed()) return;
     const errors = summary.errors ?? 0;
     const ok = (summary.total ?? 0) - errors;
     chart.current.setOption({
