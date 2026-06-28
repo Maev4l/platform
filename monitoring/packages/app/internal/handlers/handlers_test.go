@@ -67,17 +67,24 @@ func TestBadDate400(t *testing.T) {
 }
 
 func TestGeoWorld(t *testing.T) {
-	rows := []map[string]string{{"country": "FR", "callers": "9241", "ips": "1200"}}
+	// World view aggregates per-IP rows by the MaxMind-resolved country (fakeGeo
+	// resolves every IP to FR), summing requests and counting distinct IPs.
+	rows := []map[string]string{
+		{"ip": "1.2.3.4", "requests": "9000"},
+		{"ip": "5.6.7.8", "requests": "241"},
+	}
 	w := do(newAPI(rows), "/api/geo?source=bl-site&from=2026-06-01&to=2026-06-27")
 	var got struct {
 		Level     string `json:"level"`
 		Countries []struct {
 			Country string `json:"country"`
 			Callers int    `json:"callers"`
+			IPs     int    `json:"ips"`
 		} `json:"countries"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &got)
-	if got.Level != "world" || got.Countries[0].Callers != 9241 {
+	if got.Level != "world" || len(got.Countries) != 1 || got.Countries[0].Country != "FR" ||
+		got.Countries[0].Callers != 9241 || got.Countries[0].IPs != 2 {
 		t.Fatalf("bad world: %+v", got)
 	}
 }

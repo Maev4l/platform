@@ -54,25 +54,20 @@ ORDER BY 1`, groupBy, colDate, colStatus, colStatus, colStatus, colStatus, table
 	return sql, nil, nil
 }
 
-func GeoCountries(table, from, to string) (string, []string) {
-	sql := fmt.Sprintf(`
-SELECT %s AS country, count(*) AS callers, count(DISTINCT %s) AS ips
-FROM %q
-WHERE %s AND %s <> ''
-GROUP BY 1
-ORDER BY callers DESC`, colCountry, colIP, table, partitionPredicate(from, to), colCountry)
-	return sql, nil
-}
-
-func GeoIPs(table, from, to, country string) (string, []string) {
+// GeoAllIPs aggregates request counts per client IP across the whole range
+// (no country filter). The handler resolves each IP to a country via MaxMind —
+// used for both the world view (aggregate by resolved country) and the
+// country drill-down (keep IPs resolving to the selected country). This is
+// IP-based because the c-country log field is unpopulated for these sources.
+func GeoAllIPs(table, from, to string) (string, []string) {
 	sql := fmt.Sprintf(`
 SELECT %s AS ip, count(*) AS requests
 FROM %q
-WHERE %s AND %s = ?
+WHERE %s
 GROUP BY 1
 ORDER BY requests DESC
-LIMIT 5000`, colIP, table, partitionPredicate(from, to), colCountry)
-	return sql, []string{country}
+LIMIT 50000`, colIP, table, partitionPredicate(from, to))
+	return sql, nil
 }
 
 func Summary(table, from, to string) (string, []string) {

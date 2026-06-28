@@ -120,33 +120,49 @@ func (a *API) geo(c *gin.Context) {
 		return
 	}
 	country := c.Query("country")
+	// Both views resolve the client IP to a country via MaxMind (the c-country
+	// log field is unpopulated for these sources). Single underlying query.
+	sql, args := query.GeoAllIPs(src.Table, from, to)
 	if country == "" {
-		// World view: aggregate by country code
-		sql, args := query.GeoCountries(src.Table, from, to)
+		// World view: aggregate request counts + distinct IPs by resolved country.
 		a.cached(c, "geoW|"+src.Name+"|"+from+"|"+to, func(ctx context.Context) (any, error) {
 			rows, err := a.Q.Query(ctx, sql, args)
 			if err != nil {
 				return nil, err
 			}
-			out := make([]gin.H, 0, len(rows))
+			type agg struct{ callers, ips int }
+			m := map[string]*agg{}
 			for _, r := range rows {
-				out = append(out, gin.H{"country": r["country"], "callers": atoi(r["callers"]), "ips": atoi(r["ips"])})
+				loc, found := a.Geo.Lookup(r["ip"])
+				if !found || loc.Country == "" {
+					continue
+				}
+				g := m[loc.Country]
+				if g == nil {
+					g = &agg{}
+					m[loc.Country] = g
+				}
+				g.callers += atoi(r["requests"])
+				g.ips++
+			}
+			out := make([]gin.H, 0, len(m))
+			for cc, g := range m {
+				out = append(out, gin.H{"country": cc, "callers": g.callers, "ips": g.ips})
 			}
 			return gin.H{"level": "world", "countries": out}, nil
 		})
 		return
 	}
-	// Country drill-down: per-IP points enriched with GeoIP city/coords
-	sql, args := query.GeoIPs(src.Table, from, to, country)
+	// Country drill-down: keep IPs resolving to the selected country, with coords.
 	a.cached(c, "geoC|"+src.Name+"|"+from+"|"+to+"|"+country, func(ctx context.Context) (any, error) {
 		rows, err := a.Q.Query(ctx, sql, args)
 		if err != nil {
 			return nil, err
 		}
-		points := make([]gin.H, 0, len(rows))
+		points := make([]gin.H, 0)
 		for _, r := range rows {
 			loc, found := a.Geo.Lookup(r["ip"])
-			if !found {
+			if !found || loc.Country != country {
 				continue
 			}
 			points = append(points, gin.H{"ip": r["ip"], "city": loc.City, "lat": loc.Lat, "lng": loc.Lng, "requests": atoi(r["requests"])})
