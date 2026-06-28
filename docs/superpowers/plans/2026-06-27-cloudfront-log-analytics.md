@@ -331,7 +331,7 @@ git commit -m "feat(monitoring): scaffold Go binary (local server + embedded SPA
 - Produces:
   - `type Source struct { Name, Table string }`
   - `type Config struct { Region, Database, Workgroup, GeoIPPath string; Sources map[string]Source }`
-  - `func Load() (*Config, error)` — env `REGION` (default `eu-central-1`), `ATHENA_DATABASE` (default `monitoring`), `ATHENA_WORKGROUP` (default `monitoring`), `GEOIP_DB_PATH` (default `./GeoLite2-City.mmdb`), `LOG_SOURCES` (JSON `[{"name","table"}]`).
+  - `func Load() (*Config, error)` — uses **koanf** (defaults overlaid by env vars): `REGION` (default `eu-central-1`), `ATHENA_DATABASE` (default `monitoring`), `ATHENA_WORKGROUP` (default `monitoring`), `GEOIP_DB_PATH` (default `./GeoLite2-City.mmdb`), `LOG_SOURCES` (JSON `[{"name","table"}]`).
   - `func (c *Config) Source(name string) (Source, bool)`
 
 - [ ] **Step 1: Write the failing test**
@@ -372,7 +372,15 @@ func TestLoadBadJSON(t *testing.T) {
 Run: `go test ./internal/config/`
 Expected: FAIL — `undefined: Load`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Add koanf, then implement with it**
+
+Add the config library (koanf v2 + the confmap and env providers):
+
+```bash
+go get github.com/knadh/koanf/v2@v2.1.2
+go get github.com/knadh/koanf/providers/confmap@v0.1.0
+go get github.com/knadh/koanf/providers/env@v0.1.0
+```
 
 ```go
 package config
@@ -380,7 +388,10 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+
+	"github.com/knadh/koanf/providers/confmap"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/v2"
 )
 
 type Source struct {
@@ -396,27 +407,46 @@ type Config struct {
 	Sources   map[string]Source
 }
 
-func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
+// envMap translates process env var names to koanf keys. Only these are read;
+// the env provider's callback returns "" for anything else, which koanf skips.
+var envMap = map[string]string{
+	"REGION":           "region",
+	"ATHENA_DATABASE":  "database",
+	"ATHENA_WORKGROUP": "workgroup",
+	"GEOIP_DB_PATH":    "geoip_path",
+	"LOG_SOURCES":      "log_sources",
 }
 
+// Load builds configuration with koanf: defaults overlaid by environment
+// variables. LOG_SOURCES is a JSON array of {name,table}.
 func Load() (*Config, error) {
+	k := koanf.New(".")
+
+	_ = k.Load(confmap.Provider(map[string]interface{}{
+		"region":     "eu-central-1",
+		"database":   "monitoring",
+		"workgroup":  "monitoring",
+		"geoip_path": "./GeoLite2-City.mmdb",
+	}, "."), nil)
+
+	_ = k.Load(env.Provider("", ".", func(s string) string { return envMap[s] }), nil)
+
 	c := &Config{
-		Region:    env("REGION", "eu-central-1"),
-		Database:  env("ATHENA_DATABASE", "monitoring"),
-		Workgroup: env("ATHENA_WORKGROUP", "monitoring"),
-		GeoIPPath: env("GEOIP_DB_PATH", "./GeoLite2-City.mmdb"),
+		Region:    k.String("region"),
+		Database:  k.String("database"),
+		Workgroup: k.String("workgroup"),
+		GeoIPPath: k.String("geoip_path"),
 		Sources:   map[string]Source{},
 	}
-	var list []Source
-	if err := json.Unmarshal([]byte(os.Getenv("LOG_SOURCES")), &list); err != nil {
-		return nil, fmt.Errorf("parse LOG_SOURCES: %w", err)
-	}
-	for _, s := range list {
-		c.Sources[s.Name] = s
+
+	if raw := k.String("log_sources"); raw != "" {
+		var list []Source
+		if err := json.Unmarshal([]byte(raw), &list); err != nil {
+			return nil, fmt.Errorf("parse LOG_SOURCES: %w", err)
+		}
+		for _, s := range list {
+			c.Sources[s.Name] = s
+		}
 	}
 	return c, nil
 }
@@ -427,6 +457,8 @@ func (c *Config) Source(name string) (Source, bool) {
 }
 ```
 
+**koanf version note:** if the installed koanf's `env.Provider` signature differs from `env.Provider(prefix, delim, callback)`, adjust the call so it compiles AND preserves the behavior (defaults overlaid only by the five mapped env vars; unmapped vars ignored; no spurious empty-string key). Report any such adjustment.
+
 - [ ] **Step 4: Run (passes)**
 
 Run: `go test ./internal/config/`
@@ -435,8 +467,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add monitoring/packages/app/internal/config
-git commit -m "feat(monitoring): config loader + source registry"
+git add monitoring/packages/app/internal/config monitoring/packages/app/go.mod monitoring/packages/app/go.sum
+git commit -m "feat(monitoring): koanf config loader + source registry"
 ```
 
 ---
@@ -1552,16 +1584,21 @@ git commit -m "feat(monitoring): native SSO OIDC device-flow auth"
 
 **Interfaces:**
 - Consumes: `ssoauth`, `config`, `athena`, `geo`, `cache`, `handlers`.
-- Produces: the full startup sequence. SSO config from flags/env: `--sso-start-url`/`MONITORING_SSO_START_URL`, `--sso-region`/`MONITORING_SSO_REGION`, `--account-id`/`AWS_ACCOUNT_ID`, `--sso-role`/`MONITORING_SSO_ROLE`, `--addr` (default `127.0.0.1:8080`).
+- Produces: a **cobra** root command (`monitoring`) whose flags + env are merged by **koanf** (an explicitly-set flag wins, else the env var, else the flag default). Flags/env: `--sso-start-url`/`MONITORING_SSO_START_URL`, `--sso-region`/`MONITORING_SSO_REGION`, `--account-id`/`AWS_ACCOUNT_ID`, `--sso-role`/`MONITORING_SSO_ROLE`, `--addr`/`ADDR` (default `127.0.0.1:0` = auto-select free port). `RunE` runs the full startup sequence.
 
-- [ ] **Step 1: Replace main.go**
+- [ ] **Step 1: Add cobra + koanf posflag provider, then write main.go**
+
+```bash
+go get github.com/spf13/cobra@v1.8.1
+go get github.com/knadh/koanf/providers/posflag@v0.1.0
+```
 
 ```go
 package main
 
 import (
 	"context"
-	"flag"
+	"fmt"
 	"net"
 	"os"
 	"time"
@@ -1569,9 +1606,13 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/gin-gonic/gin"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/posflag"
+	"github.com/knadh/koanf/v2"
 	"github.com/pkg/browser"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	athenacli "isnan.eu/monitoring/internal/athena"
 	"isnan.eu/monitoring/internal/cache"
@@ -1583,34 +1624,64 @@ import (
 
 func main() {
 	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	gin.SetMode(gin.ReleaseMode) // suppress Gin's debug banner so logs stay clean zerolog JSON
+	gin.SetMode(gin.ReleaseMode) // keep logs clean zerolog JSON (no Gin debug banner)
+	if err := newRootCmd().Execute(); err != nil {
+		log.Fatal().Err(err).Msg("monitoring")
+	}
+}
 
-	// Each flag defaults to its env var, so the binary works with either flags or env.
-	startURL := flag.String("sso-start-url", os.Getenv("MONITORING_SSO_START_URL"), "IAM Identity Center start URL")
-	ssoRegion := flag.String("sso-region", os.Getenv("MONITORING_SSO_REGION"), "IAM Identity Center region")
-	accountID := flag.String("account-id", os.Getenv("AWS_ACCOUNT_ID"), "AWS account id")
-	ssoRole := flag.String("sso-role", os.Getenv("MONITORING_SSO_ROLE"), "IdC permission-set / role name")
-	// Port 0 → the OS assigns a free port (no collisions). Dev passes a fixed
-	// 127.0.0.1:8080 so Vite's /api proxy can find it.
-	addr := flag.String("addr", "127.0.0.1:0", "listen address (host:port; port 0 = auto-select free port)")
-	flag.Parse()
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "monitoring",
+		Short:         "CloudFront access-log analytics dashboard (local)",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE:          run,
+	}
+	f := cmd.Flags()
+	f.String("sso-start-url", "", "IAM Identity Center start URL")
+	f.String("sso-region", "", "IAM Identity Center region")
+	f.String("account-id", "", "AWS account id")
+	f.String("sso-role", "", "IdC permission-set / role name")
+	// Port 0 → OS assigns a free port (no collisions). Dev passes 127.0.0.1:8080
+	// so Vite's /api proxy can find it.
+	f.String("addr", "127.0.0.1:0", "listen address (host:port; port 0 = auto-select)")
+	return cmd
+}
 
-	ctx := context.Background()
+// cliEnvMap maps process env vars to the CLI flag keys koanf merges them into.
+var cliEnvMap = map[string]string{
+	"MONITORING_SSO_START_URL": "sso-start-url",
+	"MONITORING_SSO_REGION":    "sso-region",
+	"AWS_ACCOUNT_ID":           "account-id",
+	"MONITORING_SSO_ROLE":      "sso-role",
+	"ADDR":                     "addr",
+}
+
+func run(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
+	// koanf merges env vars with CLI flags. Passing the koanf instance to the
+	// posflag provider makes an explicitly-set flag win, else the env var, else
+	// the flag default.
+	k := koanf.New(".")
+	_ = k.Load(env.Provider("", ".", func(s string) string { return cliEnvMap[s] }), nil)
+	_ = k.Load(posflag.Provider(cmd.Flags(), ".", k), nil)
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal().Err(err).Msg("config")
+		return fmt.Errorf("config: %w", err)
 	}
 
 	// 1. Authenticate with IAM Identity Center (device flow on cold cache).
 	creds, err := ssoauth.Login(ctx, ssoauth.Config{
-		StartURL:  *startURL,
-		SSORegion: *ssoRegion,
-		AccountID: *accountID,
-		RoleName:  *ssoRole,
+		StartURL:  k.String("sso-start-url"),
+		SSORegion: k.String("sso-region"),
+		AccountID: k.String("account-id"),
+		RoleName:  k.String("sso-role"),
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("sso login")
+		return fmt.Errorf("sso login: %w", err)
 	}
 
 	// 2. AWS config (Athena region) using the IdC credentials.
@@ -1619,13 +1690,13 @@ func main() {
 		awsconfig.WithCredentialsProvider(creds),
 	)
 	if err != nil {
-		log.Fatal().Err(err).Msg("aws config")
+		return fmt.Errorf("aws config: %w", err)
 	}
 
 	// 3. GeoIP from local file.
 	resolver, err := geo.Open(cfg.GeoIPPath)
 	if err != nil {
-		log.Fatal().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip open")
+		return fmt.Errorf("geoip open %s: %w", cfg.GeoIPPath, err)
 	}
 	defer resolver.Close()
 
@@ -1636,11 +1707,12 @@ func main() {
 	r.Use(gin.Recovery())
 	api.Register(r)
 
-	// 4. Bind first so we know the actual (possibly auto-assigned) port,
-	//    then open the browser to it and serve on that listener.
-	ln, err := net.Listen("tcp", *addr)
+	// 4. Bind first to learn the actual (possibly auto-assigned) port, open the
+	//    browser to it, then serve on that listener.
+	addr := k.String("addr")
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal().Err(err).Str("addr", *addr).Msg("listen")
+		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 	url := "http://" + ln.Addr().String()
 	go func() {
@@ -1650,9 +1722,7 @@ func main() {
 	}()
 
 	log.Info().Msgf("serving on %s", url)
-	if err := r.RunListener(ln); err != nil {
-		log.Fatal().Err(err).Msg("server exited")
-	}
+	return r.RunListener(ln)
 }
 ```
 
