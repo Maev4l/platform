@@ -42,8 +42,9 @@ MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).
 `GEOIP_LICENSE_KEY` (the `download.maxmind.com` permalink authenticates by
 `license_key` query param — no account id / basic auth); a `tar.gz.sha256`
 sidecar avoids re-downloading when unchanged. Startup-only (no background
-refresh). Used only for the country drill-down — the world view uses
-`c-country`, so the app runs fine without it.
+refresh). `c-country` is unpopulated in these logs, so BOTH the world map and
+the country drill-down geolocate `c-ip` via MaxMind — the map needs the DB
+loaded (`GEOIP_LICENSE_KEY`); without it the map is empty (KPIs/histogram still work).
 
 ## Build / run (from monitoring/)
 - `make run` — **one command to run the app**: builds the SPA, embeds it, builds

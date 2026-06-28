@@ -131,15 +131,18 @@ Endpoints (served on `127.0.0.1`, no auth — the process is gated by the SSO lo
 |---|---|
 | `GET /api/sources` | List configured log sources for the selector. |
 | `GET /api/access?source=&from=&to=&groupBy=day\|week\|month` | Time-bucketed request counts split by status class. |
-| `GET /api/geo?source=&from=&to=` | World view: caller totals per country (from `c-country`). |
+| `GET /api/geo?source=&from=&to=` | World view: caller totals per country (IPs resolved via MaxMind). |
 | `GET /api/geo?source=&from=&to=&country=XX` | Drill-down: per-IP points (MaxMind resolves `c-ip` → lat/long). |
 | `GET /api/summary?source=&from=&to=` | Totals: requests, unique IPs, countries, error rate, top URIs. |
 
 - **SQL:** always partition-pruned (`year/month/day` predicate from `from`/`to`),
   positional `?` parameters — no string interpolation of user input. Unknown
   source → 404; bad date/`groupBy` → 400; Athena failure → 502.
-- **Geo:** world view uses `c-country` directly (no MaxMind); drill-down filters
-  `c-country = 'XX'`, groups by `c-ip`, resolves each via the local MaxMind DB.
+- **Geo (IP-based):** `c-country` is unpopulated in these logs, so both views
+  geolocate `c-ip` via MaxMind. World view aggregates request counts + distinct
+  IPs by the resolved country; the country drill-down keeps the IPs resolving to
+  the selected country (with city/coords). One `GeoAllIPs` query backs both. The
+  world map therefore needs the MaxMind DB loaded.
 
 ## 6. Frontend (React 18 + Vite 8 + Tailwind v4 + ECharts)
 
