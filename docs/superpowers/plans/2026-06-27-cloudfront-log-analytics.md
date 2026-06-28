@@ -47,7 +47,7 @@ monitoring/
 │   │   ├── main.tf provider.tf variables.tf outputs.tf
 │   │   ├── athena.tf glue.tf s3.tf
 │   └── web/                         # React 18 + Vite 8 + Tailwind v4 + ECharts
-│       ├── package.json vite.config.js eslint.config.js jsconfig.json index.html
+│       ├── package.json vite.config.js .oxlintrc.json jsconfig.json index.html
 │       └── src/
 │           ├── main.jsx App.jsx index.css
 │           ├── lib/ (api.js, utils.js, world.js)
@@ -2017,7 +2017,7 @@ These require the operator's IAM Identity Center credentials and a real log buck
 ## Task 13: Scaffold the React app (Vite + Tailwind v4)
 
 **Files:**
-- Create: `monitoring/packages/web/` (Vite scaffold), `package.json`, `vite.config.js`, `eslint.config.js`, `jsconfig.json`, `index.html`, `src/main.jsx`, `src/App.jsx`, `src/index.css`, `src/lib/utils.js`, `src/components/ui/{Button,Card,Select,ToggleGroup}.jsx`.
+- Create: `monitoring/packages/web/` (Vite scaffold), `package.json`, `vite.config.js`, `.oxlintrc.json`, `jsconfig.json`, `index.html`, `src/main.jsx`, `src/App.jsx`, `src/index.css`, `src/lib/utils.js`, `src/components/ui/{Button,Card,Select,ToggleGroup}.jsx`.
 
 - [ ] **Step 1: Scaffold + deps (Tailwind v4, no PostCSS)**
 
@@ -2181,22 +2181,28 @@ export const ToggleGroup = ({ value, onChange, items }) => (
 { "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"] } } }
 ```
 
-- [ ] **Step 7: eslint.config.js**
+- [ ] **Step 7: oxlint (the linter for this app)**
 
-```js
-import js from '@eslint/js';
-import react from 'eslint-plugin-react';
+Use **oxlint** (Rust-based, fast) instead of ESLint. Add it and a lint script; delete any `eslint.config.js`/ESLint deps the Vite template scaffolded.
 
-export default [
-  js.configs.recommended,
-  {
-    files: ['src/**/*.{js,jsx}'],
-    languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
-    plugins: { react },
-    rules: {},
-  },
-];
+```bash
+yarn add -D oxlint   # pin the installed version (strict, no ^) in package.json
 ```
+
+Add to `package.json` scripts: `"lint": "oxlint"`.
+
+Create `.oxlintrc.json`:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "plugins": ["react"],
+  "env": { "browser": true, "es2024": true },
+  "rules": {}
+}
+```
+
+Then `yarn --cwd monitoring/packages/web lint` should run clean (oxlint exits 0 on the scaffold). If the Vite template created `eslint.config.js` and ESLint devDeps, remove them so oxlint is the single linter.
 
 - [ ] **Step 8: Verify dev server boots** — `yarn --cwd monitoring/packages/web dev` → serves on `http://localhost:5180`.
 
