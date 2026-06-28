@@ -6,10 +6,10 @@ BIN_DIR := bin
 build:
 	go build -ldflags="-s -w" -o $(BIN_DIR)/monitoring ./cmd
 
-# Dev: serves on 127.0.0.1:8080 (matches Vite's /api proxy). A later task adds
-# the --addr flag + auto-port selection to the built binary.
+# Dev: fixed port so Vite's /api proxy (127.0.0.1:8080) matches. The built
+# binary (no --addr) auto-selects a free port instead.
 run:
-	go run ./cmd
+	go run ./cmd --addr 127.0.0.1:8080
 
 test:
 	go test ./...
