@@ -1527,14 +1527,16 @@ func deviceFlow(ctx context.Context, c Config) (cachedToken, error) {
 		var slow *oidctypes.SlowDownException
 		switch {
 		case errors.As(err, &pending):
-			time.Sleep(interval)
+			// fall through to the ctx-aware wait below
 		case errors.As(err, &slow):
 			interval += 5 * time.Second
-			time.Sleep(interval)
 		default:
 			return cachedToken{}, fmt.Errorf("create token: %w", err)
 		}
-		if ctx.Err() != nil {
+		// ctx-aware wait so Ctrl-C interrupts immediately (not after the backoff).
+		select {
+		case <-time.After(interval):
+		case <-ctx.Done():
 			return cachedToken{}, ctx.Err()
 		}
 	}
