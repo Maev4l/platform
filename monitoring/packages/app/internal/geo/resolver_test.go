@@ -21,3 +21,16 @@ func TestOpenMissingFile(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestNewResolverLookupReturnsFalse(t *testing.T) {
+	// New() produces a zero-DB resolver; Lookup must return false (no panic)
+	// so the app can start gracefully when the .mmdb is absent.
+	m := New()
+	if _, ok := m.Lookup("1.2.3.4"); ok {
+		t.Fatal("expected Lookup on empty resolver to return false")
+	}
+	// Close on a nil-DB resolver must not panic.
+	if err := m.Close(); err != nil {
+		t.Fatalf("Close on empty resolver: %v", err)
+	}
+}

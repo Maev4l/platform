@@ -15,11 +15,14 @@ type Source struct {
 }
 
 type Config struct {
-	Region    string
-	Database  string
-	Workgroup string
-	GeoIPPath string
-	Sources   map[string]Source
+	Region          string
+	Database        string
+	Workgroup       string
+	GeoIPPath       string
+	GeoIPAccountID  string
+	GeoIPLicenseKey string
+	GeoIPAutoUpdate bool
+	Sources         map[string]Source
 }
 
 // envMap translates process env var names to koanf keys. Only these are read;
@@ -29,6 +32,9 @@ var envMap = map[string]string{
 	"ATHENA_DATABASE":  "database",
 	"ATHENA_WORKGROUP": "workgroup",
 	"GEOIP_DB_PATH":    "geoip_path",
+	"GEOIP_ACCOUNT_ID": "geoip_account_id",
+	"GEOIP_LICENSE_KEY": "geoip_license_key",
+	"GEOIP_AUTO_UPDATE": "geoip_auto_update",
 	"LOG_SOURCES":      "log_sources",
 }
 
@@ -41,10 +47,13 @@ func Load() (*Config, error) {
 	// Errors are ignored on these Load calls: the confmap (static literal map)
 	// and env (in-memory) providers have no I/O and cannot realistically fail.
 	_ = k.Load(confmap.Provider(map[string]any{
-		"region":     "eu-central-1",
-		"database":   "platform-monitoring",
-		"workgroup":  "platform-monitoring",
-		"geoip_path": "./GeoLite2-City.mmdb",
+		"region":          "eu-central-1",
+		"database":        "platform-monitoring",
+		"workgroup":       "platform-monitoring",
+		"geoip_path":      "./GeoLite2-City.mmdb",
+		// Auto-update is on by default so a fresh install fetches the DB
+		// without requiring manual intervention.
+		"geoip_auto_update": true,
 	}, "."), nil)
 
 	// Layer 2: env vars — only the five explicitly mapped vars are read;
@@ -52,11 +61,14 @@ func Load() (*Config, error) {
 	_ = k.Load(env.Provider("", ".", func(s string) string { return envMap[s] }), nil)
 
 	c := &Config{
-		Region:    k.String("region"),
-		Database:  k.String("database"),
-		Workgroup: k.String("workgroup"),
-		GeoIPPath: k.String("geoip_path"),
-		Sources:   map[string]Source{},
+		Region:          k.String("region"),
+		Database:        k.String("database"),
+		Workgroup:       k.String("workgroup"),
+		GeoIPPath:       k.String("geoip_path"),
+		GeoIPAccountID:  k.String("geoip_account_id"),
+		GeoIPLicenseKey: k.String("geoip_license_key"),
+		GeoIPAutoUpdate: k.Bool("geoip_auto_update"),
+		Sources:         map[string]Source{},
 	}
 
 	// Empty / unset LOG_SOURCES is valid (no sources); only non-empty values

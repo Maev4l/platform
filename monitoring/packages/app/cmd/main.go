@@ -96,10 +96,19 @@ func run(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("aws config: %w", err)
 	}
 
-	// 3. GeoIP from local file.
-	resolver, err := geo.Open(cfg.GeoIPPath)
-	if err != nil {
-		return fmt.Errorf("geoip open %s: %w", cfg.GeoIPPath, err)
+	// 3. GeoIP — auto-update at startup (default on), then open; tolerate no DB.
+	// When credentials are absent or the download fails the binary keeps running
+	// with an empty resolver; the world view still works off c-country.
+	if cfg.GeoIPAutoUpdate && cfg.GeoIPLicenseKey != "" {
+		if _, err := geo.Update(ctx, cfg.GeoIPAccountID, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
+			log.Warn().Err(err).Msg("geoip update failed; using existing DB if present")
+		}
+	}
+	resolver := geo.New()
+	if r, err := geo.Open(cfg.GeoIPPath); err != nil {
+		log.Warn().Err(err).Str("path", cfg.GeoIPPath).Msg("geoip DB unavailable; country drill-down disabled")
+	} else {
+		resolver = r
 	}
 	defer resolver.Close()
 

@@ -19,6 +19,11 @@ type Resolver interface {
 
 type MMDB struct{ db *geoip2.Reader }
 
+// New returns a resolver with no database loaded. Lookup returns false for
+// every IP until a DB is opened via Open. Used when the .mmdb is absent so
+// the app still starts and the world view (based on c-country) keeps working.
+func New() *MMDB { return &MMDB{} }
+
 func Open(path string) (*MMDB, error) {
 	db, err := geoip2.Open(path)
 	if err != nil {
@@ -28,6 +33,11 @@ func Open(path string) (*MMDB, error) {
 }
 
 func (m *MMDB) Lookup(ipStr string) (Location, bool) {
+	// Nil-safe: when no DB was loaded (e.g. missing file) Lookup is a no-op
+	// instead of panicking; the country drill-down returns no points gracefully.
+	if m.db == nil {
+		return Location{}, false
+	}
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return Location{}, false
@@ -44,4 +54,10 @@ func (m *MMDB) Lookup(ipStr string) (Location, bool) {
 	}, true
 }
 
-func (m *MMDB) Close() error { return m.db.Close() }
+func (m *MMDB) Close() error {
+	// Nil-safe: allow Close on a resolver created with New() (no DB loaded).
+	if m.db != nil {
+		return m.db.Close()
+	}
+	return nil
+}
