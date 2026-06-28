@@ -28,14 +28,14 @@ type Config struct {
 // envMap translates process env var names to koanf keys. Only these are read;
 // the env provider's callback returns "" for anything else, which koanf skips.
 var envMap = map[string]string{
-	"REGION":           "region",
-	"ATHENA_DATABASE":  "database",
-	"ATHENA_WORKGROUP": "workgroup",
-	"GEOIP_DB_PATH":    "geoip_path",
-	"GEOIP_ACCOUNT_ID": "geoip_account_id",
+	"REGION":            "region",
+	"ATHENA_DATABASE":   "database",
+	"ATHENA_WORKGROUP":  "workgroup",
+	"GEOIP_DB_PATH":     "geoip_path",
+	"GEOIP_ACCOUNT_ID":  "geoip_account_id",
 	"GEOIP_LICENSE_KEY": "geoip_license_key",
 	"GEOIP_AUTO_UPDATE": "geoip_auto_update",
-	"LOG_SOURCES":      "log_sources",
+	"LOG_SOURCES":       "log_sources",
 }
 
 // Load builds configuration with koanf: defaults overlaid by environment
@@ -47,10 +47,10 @@ func Load() (*Config, error) {
 	// Errors are ignored on these Load calls: the confmap (static literal map)
 	// and env (in-memory) providers have no I/O and cannot realistically fail.
 	_ = k.Load(confmap.Provider(map[string]any{
-		"region":          "eu-central-1",
-		"database":        "platform-monitoring",
-		"workgroup":       "platform-monitoring",
-		"geoip_path":      "./GeoLite2-City.mmdb",
+		"region":     "eu-central-1",
+		"database":   "platform-monitoring",
+		"workgroup":  "platform-monitoring",
+		"geoip_path": "./GeoLite2-City.mmdb",
 		// Auto-update is on by default so a fresh install fetches the DB
 		// without requiring manual intervention.
 		"geoip_auto_update": true,
