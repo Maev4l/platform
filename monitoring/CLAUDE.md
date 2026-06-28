@@ -23,14 +23,26 @@ Configure via env/flags: `MONITORING_SSO_START_URL`, `MONITORING_SSO_REGION`,
 identity are managed separately.)
 
 ## Data model
-Each log source = `{name, table}` in `var.log_sources` → one Glue table with
-partition projection on `year/month/day`. Add a source via a map entry +
-`terraform apply`.
+Each log source is an entry in `var.log_sources` (key = name, value =
+`{bucket, prefix}`) → one Glue table named `replace(name,'-','_')` with
+partition projection on `year/month/day`. The binary's `LOG_SOURCES` env
+(`[{name,table}]`) comes from the `log_sources_env` output. Add a source via a
+map entry (see `packages/infrastructure/terraform.tfvars`) + `terraform apply`.
+
+## Config (.env)
+Runtime settings come from env vars (parsed by koanf). `make run` auto-loads a
+gitignored `packages/app/.env` (template: `packages/app/.env.example`) and falls
+back to `terraform output -raw log_sources_env` for `LOG_SOURCES`. Copy
+`.env.example` → `.env` and fill it. Secrets (`.env`, `GeoIP.conf`, the `.mmdb`)
+are gitignored.
 
 ## GeoIP
-MaxMind GeoLite2 City `.mmdb` as a LOCAL file (`GEOIP_DB_PATH`, default
-`./GeoLite2-City.mmdb`). Used only for country drill-down; the world view uses
-`c-country`. Refresh = re-download the file.
+MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).
+**Auto-downloaded at startup** (default on) when missing or stale, using
+`GEOIP_ACCOUNT_ID` + `GEOIP_LICENSE_KEY` (basic auth; license-key-only permalink
+if no account id); a `tar.gz.sha256` sidecar avoids re-downloading when
+unchanged. Startup-only (no background refresh). Used only for the country
+drill-down — the world view uses `c-country`, so the app runs fine without it.
 
 ## Build / run (from monitoring/)
 - `make backend-build` — build SPA, embed it, build the binary
