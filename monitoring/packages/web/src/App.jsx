@@ -15,6 +15,7 @@ export default function App() {
   const [sources, setSources] = useState([]);
   const [state, setState] = useState({ source: '', from: twoWeeksAgo, to: today, groupBy: 'day', country: '', range: 'Last 14 days' });
   const [summary, setSummary] = useState(null);
+  const [countryCount, setCountryCount] = useState(0);
 
   useEffect(() => {
     api('/api/sources')
@@ -34,11 +35,20 @@ export default function App() {
       .catch((err) => console.error('summary fetch failed', err));
   }, [state.source, state.from, state.to]);
 
+  // "Countries" KPI is the count of countries in the IP-resolved world geo
+  // (matches the map's dots); the summary query no longer counts c-country.
+  useEffect(() => {
+    if (!state.source) return;
+    api('/api/geo', { source: state.source, from: state.from, to: state.to })
+      .then((d) => setCountryCount(d?.countries?.length ?? 0))
+      .catch((err) => console.error('country count fetch failed', err));
+  }, [state.source, state.from, state.to]);
+
   return (
     <div className="flex h-screen flex-col">
       <Header sources={sources} state={state} setState={setState} />
       <main className="grid flex-1 grid-cols-[1fr_340px] grid-rows-[auto_1fr_auto] gap-3.5 p-4 min-h-0">
-        <div className="col-span-2"><Kpis summary={summary} /></div>
+        <div className="col-span-2"><Kpis summary={summary} countries={countryCount} /></div>
         <GeoMap state={state} setState={setState} />
         <aside className="flex flex-col gap-3.5 min-h-0">
           <StatusDonut summary={summary} />

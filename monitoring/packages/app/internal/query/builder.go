@@ -11,11 +11,10 @@ var ErrBadGroupBy = errors.New("invalid groupBy")
 // Physical Parquet column names (quoted). Centralised: fix here if a name
 // differs (Task 12 verification query confirms the real names).
 const (
-	colDate    = `"date"`
-	colIP      = `"c-ip"`
-	colCountry = `"c-country"`
-	colStatus  = `"sc-status"`
-	colURI     = `"cs-uri-stem"`
+	colDate   = `"date"`
+	colIP     = `"c-ip"`
+	colStatus = `"sc-status"`
+	colURI    = `"cs-uri-stem"`
 )
 
 // partKey converts a validated YYYY-MM-DD date to the integer composite key
@@ -71,13 +70,14 @@ LIMIT 50000`, colIP, table, partitionPredicate(from, to))
 }
 
 func Summary(table, from, to string) (string, []string) {
+	// No country count here: c-country is unpopulated, so the "Countries" KPI is
+	// derived client-side from the IP-resolved world geo (matching the map).
 	sql := fmt.Sprintf(`
 SELECT count(*) AS total,
        count(DISTINCT %s) AS unique_ips,
-       count(DISTINCT %s) AS countries,
        count_if(%s BETWEEN '400' AND '599') AS errors
 FROM %q
-WHERE %s`, colIP, colCountry, colStatus, table, partitionPredicate(from, to))
+WHERE %s`, colIP, colStatus, table, partitionPredicate(from, to))
 	return sql, nil
 }
 

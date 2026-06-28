@@ -10,11 +10,12 @@ const Kpi = ({ label, value, unit, accent }) => (
   </Card>
 );
 
-export const Kpis = ({ summary }) => (
+export const Kpis = ({ summary, countries }) => (
   <div className="grid grid-cols-4 gap-3.5">
     <Kpi label="Total Requests" value={(summary?.total ?? 0).toLocaleString()} accent />
     <Kpi label="Unique Callers" value={(summary?.uniqueIps ?? 0).toLocaleString()} unit="ip" />
     <Kpi label="Error Rate · 4xx+5xx" value={(summary?.errorRate ?? 0).toFixed(2)} unit="%" />
-    <Kpi label="Countries" value={summary?.countries ?? 0} />
+    {/* Derived from the IP-resolved world geo (matches the map), not c-country. */}
+    <Kpi label="Countries" value={countries ?? 0} />
   </div>
 );

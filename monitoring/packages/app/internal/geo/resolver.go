@@ -43,7 +43,10 @@ func (m *MMDB) Lookup(ipStr string) (Location, bool) {
 		return Location{}, false
 	}
 	rec, err := m.db.City(ip)
-	if err != nil || rec == nil || (rec.Location.Latitude == 0 && rec.Location.Longitude == 0) {
+	// Require a resolved country (the world map groups by it). Coordinates may be
+	// missing/zero for some IPs — that's fine for the world view; the drill-down
+	// skips zero-coord points itself.
+	if err != nil || rec == nil || rec.Country.IsoCode == "" {
 		return Location{}, false
 	}
 	return Location{

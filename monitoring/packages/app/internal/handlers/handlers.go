@@ -162,7 +162,7 @@ func (a *API) geo(c *gin.Context) {
 		points := make([]gin.H, 0)
 		for _, r := range rows {
 			loc, found := a.Geo.Lookup(r["ip"])
-			if !found || loc.Country != country {
+			if !found || loc.Country != country || (loc.Lat == 0 && loc.Lng == 0) {
 				continue
 			}
 			points = append(points, gin.H{"ip": r["ip"], "city": loc.City, "lat": loc.Lat, "lng": loc.Lng, "requests": atoi(r["requests"])})
@@ -185,7 +185,7 @@ func (a *API) summary(c *gin.Context) {
 			return nil, err
 		}
 		if len(rows) == 0 {
-			return gin.H{"total": 0, "uniqueIps": 0, "countries": 0, "errors": 0, "errorRate": 0.0, "topUris": []gin.H{}}, nil
+			return gin.H{"total": 0, "uniqueIps": 0, "errors": 0, "errorRate": 0.0, "topUris": []gin.H{}}, nil
 		}
 		r := rows[0]
 		total, errs := atoi(r["total"]), atoi(r["errors"])
@@ -202,7 +202,7 @@ func (a *API) summary(c *gin.Context) {
 		for _, u := range top {
 			uris = append(uris, gin.H{"uri": u["uri"], "hits": atoi(u["hits"])})
 		}
-		return gin.H{"total": total, "uniqueIps": atoi(r["unique_ips"]), "countries": atoi(r["countries"]), "errors": errs, "errorRate": rate, "topUris": uris}, nil
+		return gin.H{"total": total, "uniqueIps": atoi(r["unique_ips"]), "errors": errs, "errorRate": rate, "topUris": uris}, nil
 	})
 }
 
