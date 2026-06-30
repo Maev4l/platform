@@ -126,7 +126,7 @@ func fetchReport(ctx context.Context, ce costExplorerAPI, now time.Time) (Report
 		})
 		// Forecast can fail when AWS lacks enough history; degrade to 0 rather
 		// than dropping the whole report.
-		if ferr == nil && fc.Total != nil && fc.Total.Amount != nil {
+		if ferr == nil && fc != nil && fc.Total != nil && fc.Total.Amount != nil {
 			forecastRemainder = parseAmount(*fc.Total.Amount)
 		}
 	}
