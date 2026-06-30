@@ -68,8 +68,14 @@ func bodyBlocks(alert *notifications.Message) []slack.Block {
 		return []slack.Block{plainSection(alert.Content)}
 	}
 	blocks, err := mdslack.Render(alert.Content)
-	if err != nil || len(blocks) == 0 {
-		log.Warnf("Markdown render failed, falling back to plain text: %v", err)
+	// Distinguish the two fallback triggers so operators aren't shown a
+	// "<nil>" error when the cause is simply empty/unrenderable content.
+	if err != nil {
+		log.Warnf("Markdown render error, falling back to plain text: %v", err)
+		return []slack.Block{plainSection(alert.Content)}
+	}
+	if len(blocks) == 0 {
+		log.Warn("Markdown render produced no blocks, falling back to plain text")
 		return []slack.Block{plainSection(alert.Content)}
 	}
 	return blocks

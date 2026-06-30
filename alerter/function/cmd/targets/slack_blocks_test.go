@@ -41,7 +41,7 @@ func TestBuildBlocks_PlainFormatIsLiteral(t *testing.T) {
 	}
 }
 
-func TestBuildBlocks_RenderFailureFallsBackToPlain(t *testing.T) {
+func TestBuildBlocks_EmptyRenderFallsBackToPlain(t *testing.T) {
 	// Whitespace-only markdown yields no blocks -> fallback to a plain section.
 	js := blocksJSON(t, &notifications.Message{Content: "   "})
 	if !strings.Contains(js, `"type":"plain_text"`) {
