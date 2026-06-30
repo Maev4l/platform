@@ -46,7 +46,7 @@ func TestRender_ListsAndQuote(t *testing.T) {
 	if !strings.Contains(got, `• one\n• two`) {
 		t.Fatalf("bullets wrong: %s", got)
 	}
-	if !strings.Contains(got, `> note`) && !strings.Contains(got, `> note`) {
+	if !strings.Contains(got, `> note`) {
 		t.Fatalf("quote wrong: %s", got)
 	}
 }
