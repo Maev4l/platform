@@ -19,6 +19,7 @@ type Config struct {
 	Database        string
 	Workgroup       string
 	GeoIPPath       string
+	GeoIPASNPath    string
 	GeoIPLicenseKey string
 	GeoIPAutoUpdate bool
 	Sources         map[string]Source
@@ -31,6 +32,7 @@ var envMap = map[string]string{
 	"ATHENA_DATABASE":   "database",
 	"ATHENA_WORKGROUP":  "workgroup",
 	"GEOIP_DB_PATH":     "geoip_path",
+	"GEOIP_ASN_DB_PATH": "geoip_asn_path",
 	"GEOIP_LICENSE_KEY": "geoip_license_key",
 	"GEOIP_AUTO_UPDATE": "geoip_auto_update",
 	"LOG_SOURCES":       "log_sources",
@@ -49,6 +51,7 @@ func Load() (*Config, error) {
 		"database":   "platform-monitoring",
 		"workgroup":  "platform-monitoring",
 		"geoip_path": "./GeoLite2-City.mmdb",
+		"geoip_asn_path": "./GeoLite2-ASN.mmdb",
 		// Auto-update is on by default so a fresh install fetches the DB
 		// without requiring manual intervention.
 		"geoip_auto_update": true,
@@ -63,6 +66,7 @@ func Load() (*Config, error) {
 		Database:        k.String("database"),
 		Workgroup:       k.String("workgroup"),
 		GeoIPPath:       k.String("geoip_path"),
+		GeoIPASNPath:    k.String("geoip_asn_path"),
 		GeoIPLicenseKey: k.String("geoip_license_key"),
 		GeoIPAutoUpdate: k.Bool("geoip_auto_update"),
 		Sources:         map[string]Source{},

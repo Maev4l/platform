@@ -54,3 +54,24 @@ func TestGeoIPAutoUpdateFalse(t *testing.T) {
 		t.Fatal("expected GeoIPAutoUpdate to be false when GEOIP_AUTO_UPDATE=false")
 	}
 }
+
+func TestGeoIPASNPathDefaultAndOverride(t *testing.T) {
+	os.Unsetenv("LOG_SOURCES")
+	os.Unsetenv("GEOIP_ASN_DB_PATH")
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.GeoIPASNPath != "./GeoLite2-ASN.mmdb" {
+		t.Fatalf("default GeoIPASNPath = %q, want ./GeoLite2-ASN.mmdb", c.GeoIPASNPath)
+	}
+	os.Setenv("GEOIP_ASN_DB_PATH", "/tmp/asn.mmdb")
+	t.Cleanup(func() { os.Unsetenv("GEOIP_ASN_DB_PATH") })
+	c, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.GeoIPASNPath != "/tmp/asn.mmdb" {
+		t.Fatalf("override GeoIPASNPath = %q, want /tmp/asn.mmdb", c.GeoIPASNPath)
+	}
+}
