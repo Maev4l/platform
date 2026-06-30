@@ -3,7 +3,8 @@ module isnan.eu/idp
 go 1.26.1
 
 require (
-	github.com/Maev4l/platform/users-management v1.2.0
+	github.com/Maev4l/platform/notifications v1.1.0
+	github.com/Maev4l/platform/users-management v1.3.0
 	github.com/aws/aws-lambda-go v1.53.0
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.68.3

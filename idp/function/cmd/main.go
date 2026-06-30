@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Maev4l/platform/notifications"
 	"github.com/Maev4l/platform/users-management/pkg/cognito"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -76,11 +77,17 @@ func main() {
 			appName,
 			awsCliCmd,
 		)
-		return &cognito.NotificationPayload{
+		// Construct notifications.Message directly (cognito.NotificationPayload is
+		// an alias for it) so this module depends on notifications v1.1.0 explicitly
+		// and `go mod tidy` keeps the Format field available.
+		return &notifications.Message{
 			Source:            "platform-idp-onboard-users",
 			SourceDescription: fmt.Sprintf("%s user sign up", appName),
 			Target:            "slack",
 			Content:           content,
+			// Pin plain rendering: content embeds literal CLI commands and
+			// identifiers; the alerter now defaults to Markdown.
+			Format: "plain",
 		}, true
 	}
 
@@ -99,11 +106,14 @@ func main() {
 			appConfig.AppName,
 			awsCliCmd,
 		)
-		return &cognito.NotificationPayload{
+		return &notifications.Message{
 			Source:            "platform-idp-app-approval",
 			SourceDescription: fmt.Sprintf("%s access request", appConfig.AppName),
 			Target:            "slack",
 			Content:           content,
+			// Pin plain rendering: content embeds literal CLI commands and
+			// identifiers; the alerter now defaults to Markdown.
+			Format: "plain",
 		}, true
 	}
 

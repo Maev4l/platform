@@ -1,5 +1,7 @@
-github.com/Maev4l/platform/users-management v1.2.0 h1:+8dPYCeJd9oymg6NrHIxFbwsPbFcpyJbZ1lCgBmp9PU=
-github.com/Maev4l/platform/users-management v1.2.0/go.mod h1:r6XFkW0EgaKhS2anFYK9UbxNpu4BfRUo511jgz9aU6w=
+github.com/Maev4l/platform/notifications v1.1.0 h1:k5AbcCCv7jGRALsaSMIShyWMtUNdyctymZhHSzl1geE=
+github.com/Maev4l/platform/notifications v1.1.0/go.mod h1:+P2IYhheFNlj9Ox01plobsdMJrDAka+eG/5VSk43YWM=
+github.com/Maev4l/platform/users-management v1.3.0 h1:iewBTy6Z0WZRFQJtllBulSzM4XScNsz0GbLkV7jRTh4=
+github.com/Maev4l/platform/users-management v1.3.0/go.mod h1:EMgQskblBpbzipxC5TngyJZ9GY698iefM+siiPPPqEY=
 github.com/aws/aws-lambda-go v1.53.0 h1:uAMv6W/vCP/L494BAUSxe+8KVBIPK+SGPyapFt3FuMk=
 github.com/aws/aws-lambda-go v1.53.0/go.mod h1:dpMpZgvWx5vuQJfBt0zqBha60q7Dd7RfgJv23DymV8A=
 github.com/aws/aws-sdk-go-v2 v1.41.4 h1:10f50G7WyU02T56ox1wWXq+zTX9I1zxG46HYuG1hH/k=
