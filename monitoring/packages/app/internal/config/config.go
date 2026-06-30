@@ -47,10 +47,10 @@ func Load() (*Config, error) {
 	// Errors are ignored on these Load calls: the confmap (static literal map)
 	// and env (in-memory) providers have no I/O and cannot realistically fail.
 	_ = k.Load(confmap.Provider(map[string]any{
-		"region":     "eu-central-1",
-		"database":   "platform-monitoring",
-		"workgroup":  "platform-monitoring",
-		"geoip_path": "./GeoLite2-City.mmdb",
+		"region":         "eu-central-1",
+		"database":       "platform-monitoring",
+		"workgroup":      "platform-monitoring",
+		"geoip_path":     "./GeoLite2-City.mmdb",
 		"geoip_asn_path": "./GeoLite2-ASN.mmdb",
 		// Auto-update is on by default so a fresh install fetches the DB
 		// without requiring manual intervention.
