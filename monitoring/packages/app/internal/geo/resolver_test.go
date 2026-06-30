@@ -34,3 +34,22 @@ func TestNewResolverLookupReturnsFalse(t *testing.T) {
 		t.Fatalf("Close on empty resolver: %v", err)
 	}
 }
+
+func TestLoadASNMissingFile(t *testing.T) {
+	m := New()
+	if err := m.LoadASN("/no/such/asn.mmdb"); err == nil {
+		t.Fatal("expected error loading missing ASN db")
+	}
+	// Close must stay nil-safe with no readers loaded.
+	if err := m.Close(); err != nil {
+		t.Fatalf("Close after failed LoadASN: %v", err)
+	}
+}
+
+func TestLocationCarriesASNOrg(t *testing.T) {
+	// Compile-level + value check that the field exists and round-trips.
+	loc := Location{ASNOrg: "Orange S.A."}
+	if loc.ASNOrg != "Orange S.A." {
+		t.Fatal("ASNOrg not set")
+	}
+}

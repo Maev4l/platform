@@ -8,8 +8,9 @@ import (
 
 type Location struct {
 	City        string  `json:"city"`
-	Country     string  `json:"country"`     // ISO 3166-1 alpha-2 code (e.g. "FR") — keyed by the world map / CENTROIDS
+	Country     string  `json:"country"`     // ISO 3166-1 alpha-2 (e.g. "FR") — keyed by the world map / CENTROIDS
 	CountryName string  `json:"countryName"` // full English name (e.g. "France") — used by the callers list
+	ASNOrg      string  `json:"asnOrg"`      // MaxMind autonomous-system organization (e.g. "Orange S.A.")
 	Lat         float64 `json:"lat"`
 	Lng         float64 `json:"lng"`
 }
@@ -18,11 +19,17 @@ type Resolver interface {
 	Lookup(ip string) (Location, bool)
 }
 
-type MMDB struct{ db *geoip2.Reader }
+// MMDB resolves an IP via two optional MaxMind readers: City (geo) and ASN
+// (organization). Either may be nil — a nil reader simply contributes no data,
+// so the app starts and degrades gracefully when a .mmdb is absent.
+type MMDB struct {
+	city *geoip2.Reader
+	asn  *geoip2.Reader
+}
 
-// New returns a resolver with no database loaded. Lookup returns false for
-// every IP until a DB is opened via Open. Used when the .mmdb is absent so
-// the app still starts and the world view (based on c-country) keeps working.
+// New returns a resolver with no databases loaded. Lookup returns false for
+// every IP until a City DB is opened via Open (and optionally an ASN DB via
+// LoadASN).
 func New() *MMDB { return &MMDB{} }
 
 func Open(path string) (*MMDB, error) {
@@ -30,39 +37,62 @@ func Open(path string) (*MMDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MMDB{db: db}, nil
+	return &MMDB{city: db}, nil
 }
 
-func (m *MMDB) Lookup(ipStr string) (Location, bool) {
-	// Nil-safe: when no DB was loaded (e.g. missing file) Lookup is a no-op
-	// instead of panicking; the country drill-down returns no points gracefully.
-	if m.db == nil {
-		return Location{}, false
+// LoadASN attaches a GeoLite2-ASN reader to this resolver. On error the resolver
+// keeps asn == nil (AS org is then simply absent from results).
+func (m *MMDB) LoadASN(path string) error {
+	db, err := geoip2.Open(path)
+	if err != nil {
+		return err
 	}
+	m.asn = db
+	return nil
+}
+
+// Lookup resolves country/city (City DB) and AS organization (ASN DB)
+// independently. The returned bool means "country resolved" (the world map
+// relies on this); ASNOrg is populated whenever the ASN DB has data, even when
+// the country is unknown — so an unplaceable IP still carries its org.
+func (m *MMDB) Lookup(ipStr string) (Location, bool) {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return Location{}, false
 	}
-	rec, err := m.db.City(ip)
-	// Require a resolved country (the world map groups by it). Coordinates may be
-	// missing/zero for some IPs — that's fine for the world view; the drill-down
-	// skips zero-coord points itself.
-	if err != nil || rec == nil || rec.Country.IsoCode == "" {
-		return Location{}, false
+	var loc Location
+	countryOK := false
+	if m.city != nil {
+		// Require a resolved country (the world map groups by it). Coordinates
+		// may be missing/zero for some IPs — fine for the world view; the
+		// drill-down skips zero-coord points itself.
+		if rec, err := m.city.City(ip); err == nil && rec != nil && rec.Country.IsoCode != "" {
+			loc.City = rec.City.Names["en"]
+			loc.Country = rec.Country.IsoCode
+			loc.CountryName = rec.Country.Names["en"]
+			loc.Lat = rec.Location.Latitude
+			loc.Lng = rec.Location.Longitude
+			countryOK = true
+		}
 	}
-	return Location{
-		City:        rec.City.Names["en"],
-		Country:     rec.Country.IsoCode,
-		CountryName: rec.Country.Names["en"],
-		Lat:         rec.Location.Latitude,
-		Lng:         rec.Location.Longitude,
-	}, true
+	if m.asn != nil {
+		if rec, err := m.asn.ASN(ip); err == nil && rec != nil {
+			loc.ASNOrg = rec.AutonomousSystemOrganization
+		}
+	}
+	return loc, countryOK
 }
 
+// Close closes both readers; each is nil-safe (a resolver from New() or one
+// without an ASN DB closes cleanly).
 func (m *MMDB) Close() error {
-	// Nil-safe: allow Close on a resolver created with New() (no DB loaded).
-	if m.db != nil {
-		return m.db.Close()
+	if m.city != nil {
+		if err := m.city.Close(); err != nil {
+			return err
+		}
+	}
+	if m.asn != nil {
+		return m.asn.Close()
 	}
 	return nil
 }
