@@ -8,6 +8,9 @@ package notifications
 type Message struct {
 	Target            string `json:"target"`            // routing key, e.g. "slack"
 	Source            string `json:"source"`            // producer id
-	SourceDescription string `json:"sourceDescription"` // human label (Slack pretext)
-	Content           string `json:"content"`           // message body (Slack text)
+	SourceDescription string `json:"sourceDescription"` // human label (Slack context)
+	Content           string `json:"content"`           // message body (Markdown by default)
+	// Format selects rendering: "" or "markdown" (default) => Markdown;
+	// "plain" => literal text. omitempty keeps v1.0.0 producers' bytes unchanged.
+	Format string `json:"format,omitempty"`
 }
