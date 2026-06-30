@@ -7,10 +7,11 @@ import (
 )
 
 type Location struct {
-	City    string  `json:"city"`
-	Country string  `json:"country"`
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
+	City        string  `json:"city"`
+	Country     string  `json:"country"`     // ISO 3166-1 alpha-2 code (e.g. "FR") — keyed by the world map / CENTROIDS
+	CountryName string  `json:"countryName"` // full English name (e.g. "France") — used by the callers list
+	Lat         float64 `json:"lat"`
+	Lng         float64 `json:"lng"`
 }
 
 type Resolver interface {
@@ -50,10 +51,11 @@ func (m *MMDB) Lookup(ipStr string) (Location, bool) {
 		return Location{}, false
 	}
 	return Location{
-		City:    rec.City.Names["en"],
-		Country: rec.Country.IsoCode,
-		Lat:     rec.Location.Latitude,
-		Lng:     rec.Location.Longitude,
+		City:        rec.City.Names["en"],
+		Country:     rec.Country.IsoCode,
+		CountryName: rec.Country.Names["en"],
+		Lat:         rec.Location.Latitude,
+		Lng:         rec.Location.Longitude,
 	}, true
 }
 

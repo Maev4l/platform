@@ -177,10 +177,10 @@ func TestCallersGrouping(t *testing.T) {
 		{"ip": "1.1.1.0", "requests": "10"},  // ties with 1.1.1.1, lower IP should sort first
 	}
 	g := mapGeo{
-		"1.1.1.1": {City: "Lyon", Country: "FR", Lat: 45.7, Lng: 4.8},
-		"2.2.2.2": {City: "Paris", Country: "FR", Lat: 48.8, Lng: 2.3},
-		"3.3.3.3": {City: "Berlin", Country: "DE", Lat: 52.5, Lng: 13.4},
-		"1.1.1.0": {City: "Nice", Country: "FR", Lat: 43.7, Lng: 7.2},
+		"1.1.1.1": {City: "Lyon", Country: "FR", CountryName: "France", Lat: 45.7, Lng: 4.8},
+		"2.2.2.2": {City: "Paris", Country: "FR", CountryName: "France", Lat: 48.8, Lng: 2.3},
+		"3.3.3.3": {City: "Berlin", Country: "DE", CountryName: "Germany", Lat: 52.5, Lng: 13.4},
+		"1.1.1.0": {City: "Nice", Country: "FR", CountryName: "France", Lat: 43.7, Lng: 7.2},
 	}
 	w := do(newAPIGeo(rows, g), "/api/callers?source=bl-site&from=2026-06-01&to=2026-06-27")
 	if w.Code != 200 {
@@ -201,13 +201,13 @@ func TestCallersGrouping(t *testing.T) {
 		t.Fatalf("unmarshal: %v\nbody: %s", err, w.Body.Bytes())
 	}
 
-	// Alphabetical (DE, FR) then Unknown last.
-	if len(got.Groups) != 3 || got.Groups[0].Country != "DE" ||
-		got.Groups[1].Country != "FR" || got.Groups[2].Country != "Unknown" {
+	// Alphabetical by full country name (France, Germany) then Unknown last.
+	if len(got.Groups) != 3 || got.Groups[0].Country != "France" ||
+		got.Groups[1].Country != "Germany" || got.Groups[2].Country != "Unknown" {
 		t.Fatalf("bad group order: %+v", got.Groups)
 	}
-	// FR group: requests-desc → Paris(50) before tied IPs(10); lower IP wins tie; city carried through.
-	fr := got.Groups[1]
+	// France group: requests-desc → Paris(50) before tied IPs(10); lower IP wins tie; city carried through.
+	fr := got.Groups[0]
 	if fr.Count != 3 || len(fr.IPs) != 3 ||
 		fr.IPs[0].IP != "2.2.2.2" || fr.IPs[0].Requests != 50 || fr.IPs[0].City != "Paris" ||
 		fr.IPs[1].IP != "1.1.1.0" || fr.IPs[1].Requests != 10 || fr.IPs[1].City != "Nice" ||

@@ -262,10 +262,11 @@ func (a *API) callers(c *gin.Context) {
 	})
 }
 
-// groupCallersByCountry turns {ip,requests} rows into country groups. Country
-// falls back to "Unknown" when MaxMind can't place an IP. Groups are sorted
-// alphabetically with "Unknown" forced last; IPs within a group are sorted by
-// requests descending, with ip ascending as a stable tiebreak.
+// groupCallersByCountry turns {ip,requests} rows into country groups, keyed by
+// the full country name (e.g. "France") for display; falls back to "Unknown"
+// when MaxMind can't place an IP. Groups are sorted alphabetically by that name
+// with "Unknown" forced last; IPs within a group are sorted by requests
+// descending, with ip ascending as a stable tiebreak.
 func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
 	type caller struct {
 		ip       string
@@ -276,7 +277,12 @@ func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
 	for _, r := range rows {
 		country, city := unknownCountry, ""
 		if loc, found := a.Geo.Lookup(r["ip"]); found && loc.Country != "" {
-			country, city = loc.Country, loc.City
+			// Display the full name; fall back to the ISO code if MaxMind has
+			// no English name for this country (rare).
+			country, city = loc.CountryName, loc.City
+			if country == "" {
+				country = loc.Country
+			}
 		}
 		groups[country] = append(groups[country], caller{ip: r["ip"], city: city, requests: atoi(r["requests"])})
 	}
