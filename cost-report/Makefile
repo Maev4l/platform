@@ -1,4 +1,4 @@
-.PHONY: build deploy invoke infra-plan infra-apply infra-output clean
+.PHONY: build backend-deploy invoke infra-plan infra-apply infra-output clean
 
 FUNCTION := function
 INFRA    := infrastructure
@@ -7,8 +7,8 @@ INFRA    := infrastructure
 build:
 	$(MAKE) -C $(FUNCTION) package
 
-# Full deploy: build the zip, then apply the infra.
-deploy: build infra-apply
+# Full deploy: package the zip, then apply the infra.
+backend-deploy: build infra-apply
 
 infra-plan:
 	terraform -chdir=$(INFRA) plan
