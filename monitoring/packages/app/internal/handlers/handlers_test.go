@@ -156,7 +156,12 @@ type mapGeo map[string]geo.Location
 
 func (m mapGeo) Lookup(ip string) (geo.Location, bool) {
 	loc, ok := m[ip]
-	return loc, ok
+	if !ok {
+		return geo.Location{}, false
+	}
+	// Mirror MMDB: "found" means the country resolved. An entry with ASNOrg but
+	// no Country returns (loc, false) — org present, country unknown.
+	return loc, loc.Country != ""
 }
 
 func newAPIGeo(rows []map[string]string, g geo.Resolver) *API {
@@ -173,8 +178,8 @@ func TestCallersGrouping(t *testing.T) {
 		{"ip": "1.1.1.1", "requests": "10"},
 		{"ip": "2.2.2.2", "requests": "50"},
 		{"ip": "3.3.3.3", "requests": "20"},
-		{"ip": "9.9.9.9", "requests": "5"},   // unresolved → Unknown
-		{"ip": "1.1.1.0", "requests": "10"},  // ties with 1.1.1.1, lower IP should sort first
+		{"ip": "9.9.9.9", "requests": "5"},  // unresolved → Unknown
+		{"ip": "1.1.1.0", "requests": "10"}, // ties with 1.1.1.1, lower IP should sort first
 	}
 	g := mapGeo{
 		"1.1.1.1": {City: "Lyon", Country: "FR", CountryName: "France", Lat: 45.7, Lng: 4.8},
@@ -242,5 +247,43 @@ func TestCallersEmpty(t *testing.T) {
 	}
 	if w.Code != 200 || len(got.Groups) != 0 {
 		t.Fatalf("want 200 + empty groups, got %d %+v", w.Code, got.Groups)
+	}
+}
+
+func TestCallersIncludesASNOrg(t *testing.T) {
+	rows := []map[string]string{
+		{"ip": "1.1.1.1", "requests": "30"}, // FR + org
+		{"ip": "8.8.8.8", "requests": "10"}, // org but no country → Unknown, org still shown
+	}
+	g := mapGeo{
+		"1.1.1.1": {City: "Paris", Country: "FR", CountryName: "France", ASNOrg: "Orange S.A."},
+		"8.8.8.8": {ASNOrg: "Google LLC"}, // no Country → found=false → Unknown group
+	}
+	w := do(newAPIGeo(rows, g), "/api/callers?source=bl-site&from=2026-06-01&to=2026-06-27")
+	if w.Code != 200 {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var got struct {
+		Groups []struct {
+			Country string `json:"country"`
+			IPs     []struct {
+				IP     string `json:"ip"`
+				ASNOrg string `json:"asnOrg"`
+			} `json:"ips"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\nbody: %s", err, w.Body.Bytes())
+	}
+	// France (resolved) first, Unknown last.
+	if len(got.Groups) != 2 || got.Groups[0].Country != "France" || got.Groups[1].Country != "Unknown" {
+		t.Fatalf("bad groups: %+v", got.Groups)
+	}
+	if got.Groups[0].IPs[0].ASNOrg != "Orange S.A." {
+		t.Fatalf("France IP org = %q, want Orange S.A.", got.Groups[0].IPs[0].ASNOrg)
+	}
+	// Org is shown even though the IP has no country (Unknown bucket).
+	if got.Groups[1].IPs[0].IP != "8.8.8.8" || got.Groups[1].IPs[0].ASNOrg != "Google LLC" {
+		t.Fatalf("Unknown IP org = %+v, want 8.8.8.8/Google LLC", got.Groups[1].IPs[0])
 	}
 }

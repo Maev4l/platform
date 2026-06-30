@@ -271,12 +271,14 @@ func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
 	type caller struct {
 		ip       string
 		city     string
+		org      string
 		requests int
 	}
 	groups := map[string][]caller{}
 	for _, r := range rows {
+		loc, found := a.Geo.Lookup(r["ip"])
 		country, city := unknownCountry, ""
-		if loc, found := a.Geo.Lookup(r["ip"]); found && loc.Country != "" {
+		if found && loc.Country != "" {
 			// Display the full name; fall back to the ISO code if MaxMind has
 			// no English name for this country (rare).
 			country, city = loc.CountryName, loc.City
@@ -284,7 +286,9 @@ func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
 				country = loc.Country
 			}
 		}
-		groups[country] = append(groups[country], caller{ip: r["ip"], city: city, requests: atoi(r["requests"])})
+		// AS org is country-independent: populated even when found==false, so an
+		// IP that can't be geolocated still shows its organization.
+		groups[country] = append(groups[country], caller{ip: r["ip"], city: city, org: loc.ASNOrg, requests: atoi(r["requests"])})
 	}
 
 	names := make([]string, 0, len(groups))
@@ -309,7 +313,7 @@ func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
 		})
 		ips := make([]gin.H, 0, len(cs))
 		for _, x := range cs {
-			ips = append(ips, gin.H{"ip": x.ip, "city": x.city, "requests": x.requests})
+			ips = append(ips, gin.H{"ip": x.ip, "city": x.city, "asnOrg": x.org, "requests": x.requests})
 		}
 		out = append(out, gin.H{"country": name, "count": len(cs), "ips": ips})
 	}
