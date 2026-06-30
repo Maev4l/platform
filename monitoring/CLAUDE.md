@@ -8,11 +8,13 @@ logs (Parquet in S3) via Athena, and opens the dashboard in your browser.
 - `packages/app` — Go binary. SSO device-flow auth (`internal/ssoauth`), Athena
   client, GeoIP (local MaxMind), Gin API + embedded SPA. Logging via **zerolog**.
   CLI/config uses **cobra** (commands/flags) + **koanf** (merges env + CLI flags).
-  Endpoints: `/api/sources,/access,/geo,/summary`.
+  Endpoints: `/api/sources,/access,/geo,/summary,/callers`.
 - `packages/infrastructure` — Terraform: Glue partition-projection tables,
   Athena workgroup (`platform-monitoring`), results bucket.
-- `packages/web` — React 18 + Vite + Tailwind v4 + ECharts. Lints with **oxlint**
-  (`.oxlintrc.json`).
+- `packages/web` — React 18 + Vite + Tailwind v4 + ECharts + **react-router**
+  (BrowserRouter; routes `/` dashboard, `/callers` unique callers by country).
+  Shared filters (source/date/groupBy) live in URL search params. Lints with
+  **oxlint** (`.oxlintrc.json`).
 
 ## Auth
 No app login. The binary runs the SSO OIDC device flow at startup (browser
