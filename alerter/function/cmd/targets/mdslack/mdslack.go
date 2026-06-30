@@ -239,8 +239,3 @@ func lastIndexRune(r []rune, target rune) int {
 	}
 	return -1
 }
-
-// TEMP stub (replaced in Task 4): keeps the package compilable before table.go.
-func tableBlock(_ *east.Table, _ []byte) slack.Block {
-	return slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, "(table)", false, false), nil, nil)
-}
