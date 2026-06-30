@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"errors"
 	"net"
 
 	"github.com/oschwald/geoip2-golang"
@@ -84,15 +85,16 @@ func (m *MMDB) Lookup(ipStr string) (Location, bool) {
 }
 
 // Close closes both readers; each is nil-safe (a resolver from New() or one
-// without an ASN DB closes cleanly).
+// without an ASN DB closes cleanly). Both are closed unconditionally — a
+// failure closing one must not leak the other's file descriptor — and any
+// errors are joined.
 func (m *MMDB) Close() error {
+	var errs []error
 	if m.city != nil {
-		if err := m.city.Close(); err != nil {
-			return err
-		}
+		errs = append(errs, m.city.Close())
 	}
 	if m.asn != nil {
-		return m.asn.Close()
+		errs = append(errs, m.asn.Close())
 	}
-	return nil
+	return errors.Join(errs...)
 }
