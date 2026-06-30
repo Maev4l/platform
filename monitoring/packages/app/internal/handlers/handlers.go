@@ -32,6 +32,7 @@ func (a *API) Register(r *gin.Engine) {
 	r.GET("/api/access", a.access)
 	r.GET("/api/geo", a.geo)
 	r.GET("/api/summary", a.summary)
+	r.GET("/api/callers", a.callers)
 	r.NoRoute(gin.WrapH(web.Handler())) // embedded SPA fallback for all non-API routes
 }
 
@@ -237,6 +238,76 @@ func (a *API) summary(c *gin.Context) {
 		}
 		return gin.H{"total": total, "uniqueIps": atoi(r["unique_ips"]), "errors": errs, "errorRate": rate, "topUris": uris}, nil
 	})
+}
+
+// unknownCountry buckets IPs MaxMind can't place, so the Callers total
+// reconciles with the unique-IPs KPI. Forced last in the grouped output.
+const unknownCountry = "Unknown"
+
+// callers returns every unique client IP grouped by country for the source and
+// date range, reached from the "Unique Callers" KPI. IPs are resolved to
+// country+city via MaxMind — the same basis as the geo drill-down.
+func (a *API) callers(c *gin.Context) {
+	src, from, to, ok := a.validate(c)
+	if !ok {
+		return
+	}
+	sql, args := query.GeoAllIPs(src.Table, from, to)
+	a.cached(c, "callers|"+src.Name+"|"+from+"|"+to, func(ctx context.Context) (any, error) {
+		rows, err := a.Q.Query(ctx, sql, args)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"groups": a.groupCallersByCountry(rows)}, nil
+	})
+}
+
+// groupCallersByCountry turns {ip,requests} rows into country groups. Country
+// falls back to "Unknown" when MaxMind can't place an IP. Groups are sorted
+// alphabetically with "Unknown" forced last; IPs within a group are sorted by
+// requests descending, with ip ascending as a stable tiebreak.
+func (a *API) groupCallersByCountry(rows []map[string]string) []gin.H {
+	type caller struct {
+		ip       string
+		city     string
+		requests int
+	}
+	groups := map[string][]caller{}
+	for _, r := range rows {
+		country, city := unknownCountry, ""
+		if loc, found := a.Geo.Lookup(r["ip"]); found && loc.Country != "" {
+			country, city = loc.Country, loc.City
+		}
+		groups[country] = append(groups[country], caller{ip: r["ip"], city: city, requests: atoi(r["requests"])})
+	}
+
+	names := make([]string, 0, len(groups))
+	for name := range groups {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if names[i] == unknownCountry || names[j] == unknownCountry {
+			return names[j] == unknownCountry // push Unknown to the end
+		}
+		return names[i] < names[j]
+	})
+
+	out := make([]gin.H, 0, len(names))
+	for _, name := range names {
+		cs := groups[name]
+		sort.Slice(cs, func(i, j int) bool {
+			if cs[i].requests != cs[j].requests {
+				return cs[i].requests > cs[j].requests
+			}
+			return cs[i].ip < cs[j].ip
+		})
+		ips := make([]gin.H, 0, len(cs))
+		for _, x := range cs {
+			ips = append(ips, gin.H{"ip": x.ip, "city": x.city, "requests": x.requests})
+		}
+		out = append(out, gin.H{"country": name, "count": len(cs), "ips": ips})
+	}
+	return out
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }

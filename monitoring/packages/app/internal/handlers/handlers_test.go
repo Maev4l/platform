@@ -149,3 +149,91 @@ func TestGeoDrilldown(t *testing.T) {
 		t.Fatalf("bad drilldown: %+v", got)
 	}
 }
+
+// mapGeo resolves only the IPs present in the map; absent IPs → not found,
+// exercising the "Unknown" grouping path.
+type mapGeo map[string]geo.Location
+
+func (m mapGeo) Lookup(ip string) (geo.Location, bool) {
+	loc, ok := m[ip]
+	return loc, ok
+}
+
+func newAPIGeo(rows []map[string]string, g geo.Resolver) *API {
+	return &API{
+		Cfg:   &config.Config{Sources: map[string]config.Source{"bl-site": {Name: "bl-site", Table: "bl_site"}}},
+		Q:     fakeQ{rows: rows},
+		Geo:   g,
+		Cache: cache.New(time.Minute),
+	}
+}
+
+func TestCallersGrouping(t *testing.T) {
+	rows := []map[string]string{
+		{"ip": "1.1.1.1", "requests": "10"},
+		{"ip": "2.2.2.2", "requests": "50"},
+		{"ip": "3.3.3.3", "requests": "20"},
+		{"ip": "9.9.9.9", "requests": "5"}, // unresolved → Unknown
+	}
+	g := mapGeo{
+		"1.1.1.1": {City: "Lyon", Country: "FR", Lat: 45.7, Lng: 4.8},
+		"2.2.2.2": {City: "Paris", Country: "FR", Lat: 48.8, Lng: 2.3},
+		"3.3.3.3": {City: "Berlin", Country: "DE", Lat: 52.5, Lng: 13.4},
+	}
+	w := do(newAPIGeo(rows, g), "/api/callers?source=bl-site&from=2026-06-01&to=2026-06-27")
+	if w.Code != 200 {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var got struct {
+		Groups []struct {
+			Country string `json:"country"`
+			Count   int    `json:"count"`
+			IPs     []struct {
+				IP       string `json:"ip"`
+				City     string `json:"city"`
+				Requests int    `json:"requests"`
+			} `json:"ips"`
+		} `json:"groups"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+
+	// Alphabetical (DE, FR) then Unknown last.
+	if len(got.Groups) != 3 || got.Groups[0].Country != "DE" ||
+		got.Groups[1].Country != "FR" || got.Groups[2].Country != "Unknown" {
+		t.Fatalf("bad group order: %+v", got.Groups)
+	}
+	// FR group: requests-desc → Paris(50) before Lyon(10), city carried through.
+	fr := got.Groups[1]
+	if fr.Count != 2 || len(fr.IPs) != 2 ||
+		fr.IPs[0].IP != "2.2.2.2" || fr.IPs[0].Requests != 50 || fr.IPs[0].City != "Paris" ||
+		fr.IPs[1].IP != "1.1.1.1" {
+		t.Fatalf("bad FR group: %+v", fr)
+	}
+	// Unknown group: the unresolved IP, empty city.
+	unk := got.Groups[2]
+	if unk.Count != 1 || unk.IPs[0].IP != "9.9.9.9" || unk.IPs[0].City != "" {
+		t.Fatalf("bad Unknown group: %+v", unk)
+	}
+	// Count integrity: count == len(ips) per group; sum == distinct IPs.
+	sum := 0
+	for _, grp := range got.Groups {
+		if grp.Count != len(grp.IPs) {
+			t.Fatalf("count != len(ips) for %s", grp.Country)
+		}
+		sum += grp.Count
+	}
+	if sum != len(rows) {
+		t.Fatalf("sum of counts %d != distinct IPs %d", sum, len(rows))
+	}
+}
+
+func TestCallersEmpty(t *testing.T) {
+	w := do(newAPIGeo(nil, mapGeo{}), "/api/callers?source=bl-site&from=2026-06-01&to=2026-06-27")
+	var got struct {
+		Groups []any `json:"groups"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || len(got.Groups) != 0 {
+		t.Fatalf("want 200 + empty groups, got %d %+v", w.Code, got.Groups)
+	}
+}
