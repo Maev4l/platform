@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
+	"isnan.eu/alerting/cmd/targets/mdslack"
 )
 
 // SSM parameter name containing the Slack token - read from env var
@@ -49,33 +50,45 @@ func (n slackNotifier) GetName() string {
 	return n.name
 }
 
+// buildMessageBlocks assembles the Slack Block Kit payload: a context block for
+// the source label (when present) followed by the rendered body.
+func buildMessageBlocks(alert *notifications.Message) []slack.Block {
+	var blocks []slack.Block
+	if alert.SourceDescription != "" {
+		blocks = append(blocks, slack.NewContextBlock("",
+			slack.NewTextBlockObject(slack.MarkdownType, alert.SourceDescription, false, false)))
+	}
+	return append(blocks, bodyBlocks(alert)...)
+}
+
+// bodyBlocks renders the content. "plain" sends literal text; otherwise Markdown,
+// falling back to a literal section so an alert is never dropped.
+func bodyBlocks(alert *notifications.Message) []slack.Block {
+	if alert.Format == "plain" {
+		return []slack.Block{plainSection(alert.Content)}
+	}
+	blocks, err := mdslack.Render(alert.Content)
+	if err != nil || len(blocks) == 0 {
+		log.Warnf("Markdown render failed, falling back to plain text: %v", err)
+		return []slack.Block{plainSection(alert.Content)}
+	}
+	return blocks
+}
+
+// plainSection wraps a string in a plain_text section block.
+func plainSection(s string) slack.Block {
+	return slack.NewSectionBlock(slack.NewTextBlockObject(slack.PlainTextType, s, false, false), nil, nil)
+}
+
 func (n slackNotifier) SendAlert(alert *notifications.Message) error {
-	content := alert.Content
-	if content != "" {
-
-		attachment := slack.Attachment{
-			Pretext: alert.SourceDescription,
-			Text:    content,
-			/*
-				// Color Styles the Text, making it possible to have like Warnings etc.
-				Color: "#36a64f",
-				// Fields are Optional extra data!
-				Fields: []slack.AttachmentField{
-					{
-						Title: "Date",
-						Value: time.Now().String(),
-					},
-				},
-			*/
-		}
-
-		_, _, err := n.slackClient.PostMessage(channelId, slack.MsgOptionAttachments(attachment))
-
-		if err != nil {
-			log.Errorf("Failed to send alert to %s", n.name)
-			return err
-		}
-
+	if alert.Content == "" {
+		return nil
+	}
+	blocks := buildMessageBlocks(alert)
+	_, _, err := n.slackClient.PostMessage(channelId, slack.MsgOptionBlocks(blocks...))
+	if err != nil {
+		log.Errorf("Failed to send alert to %s", n.name)
+		return err
 	}
 	return nil
 }
