@@ -67,7 +67,10 @@ export default function Callers() {
                   {g.ips.map((ip) => (
                     <div key={ip.ip} className="flex items-baseline justify-between gap-3 px-3.5 py-1.5 font-mono text-[11.5px]">
                       <span className="truncate text-foreground">{ip.ip}</span>
-                      {ip.city && <span className="flex-1 truncate text-[10px] text-muted-foreground">{ip.city}</span>}
+                      {/* city · AS org — each shown only when present, on the same line as the IP */}
+                      <span className="flex-1 truncate text-[10px] text-muted-foreground">
+                        {[ip.city, ip.asnOrg].filter(Boolean).join(' · ')}
+                      </span>
                       <span className="tabular-nums text-muted-foreground">{ip.requests.toLocaleString()} req</span>
                     </div>
                   ))}
