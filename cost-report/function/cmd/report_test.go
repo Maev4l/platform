@@ -50,6 +50,10 @@ func TestComputeServiceLines(t *testing.T) {
 	if lines[0].Percent != 55 {
 		t.Errorf("line[0].Percent = %d, want 55", lines[0].Percent)
 	}
+	// 1.08/3.73 = 28.95% → rounds to 29
+	if lines[1].Percent != 29 {
+		t.Errorf("line[1].Percent = %d, want 29", lines[1].Percent)
+	}
 }
 
 func TestBuildMarkdown(t *testing.T) {
