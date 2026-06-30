@@ -90,3 +90,15 @@ func TestBuildMarkdown(t *testing.T) {
 		t.Errorf("expected exactly one fenced code block, got %d fences", strings.Count(got, "```"))
 	}
 }
+
+func TestParseAmount(t *testing.T) {
+	if got := parseAmount("2.06"); got != 2.06 {
+		t.Errorf("parseAmount(\"2.06\") = %v", got)
+	}
+	if got := parseAmount("-4.58"); got != -4.58 {
+		t.Errorf("parseAmount(\"-4.58\") = %v", got)
+	}
+	if got := parseAmount("not-a-number"); got != 0 {
+		t.Errorf("parseAmount(bad) = %v, want 0", got)
+	}
+}
