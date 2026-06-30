@@ -48,9 +48,13 @@ from `time.Now().UTC()` formatted as `January 2006`. Example for June 2026:
 ### Top 10 Services (Gross MTD)
 
 ​```
-Simple Storage Service        $2.06   45%
-Key Management Service        $1.08   23%
-EC2 - Other                   $0.59   13%
+Amazon Simple Storage Service      $2.06  45%
+    TimedStorage-ByteHrs           $1.80
+    Requests-Tier1                 $0.20
+Amazon Virtual Private Cloud       $1.79  23%
+    NatGateway-Hours               $1.20
+    NatGateway-Bytes               $0.45
+    VpcEndpoint-Hours              $0.14
 ...
 ​```
 ```
@@ -60,11 +64,18 @@ Format rules:
 - Header bullets are bold-labelled (`**Label:**`) so the alerter renders them
   bold.
 - The Top-10 list is a **fenced code block** (not a GFM table): no header row,
-  fixed-width columns, monospace. Service names are truncated to a fixed width;
-  cost is right-aligned as `$X.XX`; percentage is rounded to an integer `%`.
-  A code block reproduces the fixed-width, header-less, truncated look exactly.
-- 10 rows fit comfortably within Slack's 3000-char section limit, so no chunking
-  is required.
+  monospace. Service names are shown **in full** (no truncation); the name column
+  auto-sizes to the longest name so cost/percent columns stay aligned. Cost is
+  right-aligned as `$X.XX`; percentage is an integer `%`.
+- Each service shows its **top 3 usage types** indented beneath it (e.g.
+  `NatGateway-Hours`), so the report reveals what drives each service's cost.
+  Usage-type region prefixes (`EUC1-`) are stripped for readability. Usage rows
+  carry no percentage — only the parent service does.
+- Services and usage types whose cost rounds to **`$0.00`** are omitted from the
+  table (clutter), but their cost is still included in the grand total used for
+  percentages and the forecast base.
+- 10 services × up to 3 usage rows fit comfortably within Slack's 3000-char
+  section limit, so no chunking is required.
 
 ## Metric definitions (Cost Explorer)
 
@@ -76,7 +87,7 @@ today). "YTD" = year-to-date (Jan 1 → today). "Gross" = before credits.
 | Credits applied (MTD)  | `GetCostAndUsage`, MTD, `UnblendedCost`, filter `RECORD_TYPE = Credit`. Shown as absolute value.   |
 | Forecasted gross       | `GetCostForecast`, full current month, metric `UNBLENDED_COST`.                                     |
 | Credits used YTD       | `GetCostAndUsage`, Jan 1 → today, `UnblendedCost`, filter `RECORD_TYPE = Credit`. Absolute value.  |
-| Top 10 Services (gross)| `GetCostAndUsage`, MTD, `GroupBy = SERVICE`, `UnblendedCost`, filter `RECORD_TYPE = Usage`. Sort desc, take 10, each `%` of the gross MTD total. |
+| Top 10 Services (gross)| `GetCostAndUsage`, MTD, `GroupBy = SERVICE` then `USAGE_TYPE`, `UnblendedCost`, filter `RECORD_TYPE = Usage` (paginated). Per service: sum usage types, sort desc, take 10 services + top 3 usage types each; drop `$0.00` rows; each service `%` of the gross MTD total. |
 
 Cost Explorer is a global service reached via **us-east-1**; the CE client is
 pinned to that region while the Lambda itself runs in eu-central-1.
@@ -100,9 +111,11 @@ pinned to that region while the Lambda itself runs in eu-central-1.
 
 - Separated from AWS calls so it is testable without the CE/SNS clients.
 - Inputs: month label, the three header amounts, and the ordered top-10 service
-  list (name + amount + percent). Output: the Markdown string above.
+  list (name + amount + percent + top usage types). Output: the Markdown string above.
 - Responsibilities: currency formatting (`$X.XX`), integer percentage rounding,
-  service-name truncation to fixed width, column alignment.
+  dynamic name-column width (full names, no truncation), indented usage sub-rows,
+  column alignment. `$0.00` service/usage rows are filtered out upstream in
+  `ComputeServiceLines` (kept in the grand total).
 
 ### 3. Infrastructure (`infrastructure/`, Terraform, eu-central-1)
 

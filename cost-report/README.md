@@ -19,7 +19,12 @@ gross = before credits.
 | Credits applied (MTD)   | `GetCostAndUsage`, current month, `RECORD_TYPE=Credit` (absolute value)  |
 | Forecasted gross        | gross MTD usage + `GetCostForecast` for the remainder of the month       |
 | Credits used YTD        | `GetCostAndUsage`, Jan 1 → today, `RECORD_TYPE=Credit` (absolute value)  |
-| Top 10 Services (gross) | `GetCostAndUsage`, current month, grouped by SERVICE, `RECORD_TYPE=Usage` |
+| Top 10 Services (gross) | `GetCostAndUsage`, current month, grouped by SERVICE then USAGE_TYPE, `RECORD_TYPE=Usage` |
+
+Each service lists its **top 3 usage types** indented beneath it (e.g. `NatGateway-Hours`),
+so you can see what drives the cost. Usage-type region prefixes (`EUC1-`) are stripped
+for readability. Services and usage types whose cost rounds to `$0.00` are omitted from
+the table, but still counted in the grand total used for percentages and the forecast base.
 
 ## AWS prerequisites (one-time)
 
@@ -29,7 +34,8 @@ gross = before credits.
 ## Deploy
 
 ```bash
-make deploy
+make backend-deploy   # package the Lambda zip, then terraform apply
+make infra-apply      # apply terraform only (no rebuild)
 ```
 
 ## Manual trigger
