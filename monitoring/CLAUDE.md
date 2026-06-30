@@ -44,7 +44,8 @@ settings. Copy `.env.example` → `.env` and fill it. Secrets (`.env`,
 `GeoIP.conf`, the `.mmdb`) are gitignored.
 
 ## GeoIP
-MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).
+MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`)
+and GeoLite2-ASN `.mmdb` (`GEOIP_ASN_DB_PATH`, default `./GeoLite2-ASN.mmdb`).
 **Auto-downloaded at startup** (default on) when missing or stale, using
 `GEOIP_LICENSE_KEY` (the `download.maxmind.com` permalink authenticates by
 `license_key` query param — no account id / basic auth); a `tar.gz.sha256`
@@ -54,7 +55,8 @@ the `c_country` field first, falling back to MaxMind geolocation of `c_ip` when
 `c_country` is empty. MaxMind is also always used to place city-level dots in
 the drill-down, so the DB must be loaded (`GEOIP_LICENSE_KEY`) for dots to
 appear; without it the country-level map can still render from `c_country`
-(KPIs/histogram always work).
+(KPIs/histogram always work). The callers list displays the MaxMind-resolved AS
+organization per IP from the ASN database (`GEOIP_ASN_DB_PATH`).
 
 ## Build / run (from monitoring/)
 - `make run` — **one command to run the app**: builds the SPA, embeds it, builds

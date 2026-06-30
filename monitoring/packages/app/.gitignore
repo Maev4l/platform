@@ -6,6 +6,9 @@ internal/web/dist/assets/
 GeoLite2-City.mmdb
 GeoLite2-City.mmdb.sha256
 GeoLite2-City.mmdb.tmp
+GeoLite2-ASN.mmdb
+GeoLite2-ASN.mmdb.sha256
+GeoLite2-ASN.mmdb.tmp
 
 # Local runtime config (filled from .env.example); never commit secrets.
 .env
