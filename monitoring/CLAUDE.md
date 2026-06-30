@@ -25,16 +25,21 @@ identity are managed separately.)
 ## Data model
 Each log source is an entry in `var.log_sources` (key = name, value =
 `{bucket, prefix}`) → one Glue table named `replace(name,'-','_')` with
-partition projection on `year/month/day`. The binary's `LOG_SOURCES` env
-(`[{name,table}]`) comes from the `log_sources_env` output. Add a source via a
-map entry (see `packages/infrastructure/terraform.tfvars`) + `terraform apply`.
+partition projection on `year/month/day`. Add a source via a map entry (see
+`packages/infrastructure/terraform.tfvars`) + `terraform apply`. The Glue
+catalog is the single source of truth: at startup the binary lists the tables
+in the database (`internal/catalog`) and derives each source — display name =
+table name with `'_'`→`'-'`. No `LOG_SOURCES` to maintain. (Discovery needs
+`glue:GetTables` on the IdC role; Athena already requires Glue read access, so
+this is normally already granted.) `LOG_SOURCES` (`[{name,table}]` JSON) is
+still honored as an optional override when set — discovery is skipped then.
 
 ## Config (.env)
 Runtime settings come from env vars (parsed by koanf). `make run` auto-loads a
-gitignored `packages/app/.env` (template: `packages/app/.env.example`) and falls
-back to `terraform output -raw log_sources_env` for `LOG_SOURCES`. Copy
-`.env.example` → `.env` and fill it. Secrets (`.env`, `GeoIP.conf`, the `.mmdb`)
-are gitignored.
+gitignored `packages/app/.env` (template: `packages/app/.env.example`). Log
+sources are auto-discovered (above), so `.env` only needs the SSO + GeoIP
+settings. Copy `.env.example` → `.env` and fill it. Secrets (`.env`,
+`GeoIP.conf`, the `.mmdb`) are gitignored.
 
 ## GeoIP
 MaxMind GeoLite2 City `.mmdb` (`GEOIP_DB_PATH`, default `./GeoLite2-City.mmdb`).

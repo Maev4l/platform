@@ -8,6 +8,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/athena"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/gin-gonic/gin"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/posflag"
@@ -19,6 +20,7 @@ import (
 
 	athenacli "isnan.eu/monitoring/internal/athena"
 	"isnan.eu/monitoring/internal/cache"
+	"isnan.eu/monitoring/internal/catalog"
 	"isnan.eu/monitoring/internal/config"
 	"isnan.eu/monitoring/internal/geo"
 	"isnan.eu/monitoring/internal/handlers"
@@ -96,7 +98,22 @@ func run(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("aws config: %w", err)
 	}
 
-	// 3. GeoIP — auto-update at startup (default on), then open; tolerate no DB.
+	// 3. Discover log sources from the Glue catalog (the tables `terraform apply`
+	// created) using the credentials just obtained — the catalog is the single
+	// source of truth. An explicit LOG_SOURCES (parsed by config.Load) still wins,
+	// as an override for tests or querying a subset.
+	if len(cfg.Sources) == 0 {
+		srcs, err := catalog.Discover(ctx, glue.NewFromConfig(awsCfg), cfg.Database)
+		if err != nil {
+			return fmt.Errorf("discover log sources: %w", err)
+		}
+		for _, s := range srcs {
+			cfg.Sources[s.Name] = s
+		}
+		log.Info().Int("count", len(srcs)).Str("database", cfg.Database).Msg("discovered log sources from Glue catalog")
+	}
+
+	// 4. GeoIP — auto-update at startup (default on), then open; tolerate no DB.
 	// The geo map resolves IPs via this DB, so without it the map is empty
 	// (KPIs/histogram still work). Log the state clearly either way.
 	if !cfg.GeoIPAutoUpdate || cfg.GeoIPLicenseKey == "" {
@@ -121,7 +138,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	r.Use(gin.Recovery())
 	api.Register(r)
 
-	// 4. Bind first to learn the actual (possibly auto-assigned) port, open the
+	// 5. Bind first to learn the actual (possibly auto-assigned) port, open the
 	//    browser to it, then serve on that listener.
 	addr := k.String("addr")
 	ln, err := net.Listen("tcp", addr)

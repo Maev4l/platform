@@ -6,7 +6,6 @@
 # objects under <prefix>/year=YYYY/month=MM/day=DD/.
 #
 # Bucket convention across the platform: <app>-cloudfront-logs-<account-id>.
-# Account id 671123374425 (inferred from alexandria's ECR URL — verify it's yours).
 log_sources = {
   "alexandria"           = { bucket = "alexandria-cloudfront-logs-671123374425", prefix = "raw/app" }
   "meal-planner"         = { bucket = "meal-planner-cloudfront-logs-671123374425", prefix = "raw/app" }

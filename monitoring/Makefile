@@ -9,13 +9,12 @@ WEB    := packages/web
 # then run it (serves the real UI on an auto-selected port and opens the browser).
 # The SPA is baked into the binary, so the on-disk build artifacts are restored to
 # a clean git tree right after building — the running binary still serves the UI.
-# Loads packages/app/.env and falls back to the terraform log_sources_env output.
+# Loads packages/app/.env; log sources are auto-discovered from the Glue catalog
+# at startup (no LOG_SOURCES needed — see CLAUDE.md).
 run: backend-build
 	@git checkout -- $(APP)/internal/web/dist/index.html 2>/dev/null || true
 	@rm -rf $(APP)/internal/web/dist/assets
-	@cd $(APP) && set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
-	  if [ -z "$$LOG_SOURCES" ]; then export LOG_SOURCES=$$(terraform -chdir=../infrastructure output -raw log_sources_env 2>/dev/null); fi; \
-	  ./bin/monitoring
+	@cd $(APP) && set -a; if [ -f .env ]; then . ./.env; fi; set +a; ./bin/monitoring
 
 # Build the SPA, embed it into the Go module, build the binary.
 backend-build: frontend-build
