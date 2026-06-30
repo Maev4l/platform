@@ -21,7 +21,7 @@ export default defineConfig({
         advancedChunks: {
           groups: [
             { name: 'echarts', test: /node_modules\/(echarts|zrender)\// },
-            { name: 'react', test: /node_modules\/(react|react-dom|scheduler)\// },
+            { name: 'react', test: /node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\// },
           ],
         },
       },
