@@ -119,7 +119,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	if !cfg.GeoIPAutoUpdate || cfg.GeoIPLicenseKey == "" {
 		log.Warn().Bool("autoUpdate", cfg.GeoIPAutoUpdate).Bool("licenseKeySet", cfg.GeoIPLicenseKey != "").
 			Msg("geoip auto-update skipped (need GEOIP_AUTO_UPDATE=true + GEOIP_LICENSE_KEY); will use an existing DB if present")
-	} else if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, cfg.GeoIPPath); err != nil {
+	} else if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, "GeoLite2-City", cfg.GeoIPPath); err != nil {
 		log.Warn().Err(err).Msg("geoip download failed; will use an existing DB if present")
 	}
 	resolver := geo.New()

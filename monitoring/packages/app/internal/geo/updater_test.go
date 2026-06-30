@@ -53,7 +53,7 @@ func TestUpdateDownloadsThenDetectsUpToDate(t *testing.T) {
 
 	dbPath := filepath.Join(t.TempDir(), "GeoLite2-City.mmdb")
 
-	changed, err := Update(context.Background(), "k", dbPath)
+	changed, err := Update(context.Background(), "k", "GeoLite2-City", dbPath)
 	if err != nil || !changed {
 		t.Fatalf("first update: changed=%v err=%v", changed, err)
 	}
@@ -64,8 +64,41 @@ func TestUpdateDownloadsThenDetectsUpToDate(t *testing.T) {
 		t.Fatalf("sidecar not written")
 	}
 
-	changed, err = Update(context.Background(), "k", dbPath)
+	changed, err = Update(context.Background(), "k", "GeoLite2-City", dbPath)
 	if err != nil || changed {
 		t.Fatalf("second update should be a no-op: changed=%v err=%v", changed, err)
+	}
+}
+
+func TestUpdateUsesEditionInURL(t *testing.T) {
+	payload := []byte("fake-mmdb-bytes")
+	archive := makeArchive(t, payload)
+	sum := sha256.Sum256(archive)
+	shaHex := hex.EncodeToString(sum[:])
+
+	var gotEdition string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotEdition = r.URL.Query().Get("edition_id") // record the edition the client requested
+		switch r.URL.Query().Get("suffix") {
+		case "tar.gz.sha256":
+			w.Write([]byte(shaHex + "  GeoLite2-ASN_20260101.tar.gz\n"))
+		case "tar.gz":
+			w.Write(archive)
+		default:
+			http.Error(w, "bad suffix", 400)
+		}
+	}))
+	defer srv.Close()
+
+	old := baseURL
+	baseURL = srv.URL
+	defer func() { baseURL = old }()
+
+	dbPath := filepath.Join(t.TempDir(), "GeoLite2-ASN.mmdb")
+	if _, err := Update(context.Background(), "k", "GeoLite2-ASN", dbPath); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if gotEdition != "GeoLite2-ASN" {
+		t.Fatalf("edition_id in request = %q, want GeoLite2-ASN", gotEdition)
 	}
 }

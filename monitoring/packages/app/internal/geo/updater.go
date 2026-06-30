@@ -16,8 +16,6 @@ import (
 	"time"
 )
 
-const editionID = "GeoLite2-City"
-
 // baseURL is a var so tests can point it at an httptest server.
 var baseURL = "https://download.maxmind.com/app/geoip_download"
 
@@ -25,7 +23,7 @@ var baseURL = "https://download.maxmind.com/app/geoip_download"
 // endpoint (download.maxmind.com/app/geoip_download) authenticates ONLY via the
 // `license_key` query parameter — it does not accept HTTP basic auth, so the
 // account id is not used here (basic auth against it returns 401).
-func httpGet(ctx context.Context, licenseKey, suffix string) ([]byte, error) {
+func httpGet(ctx context.Context, licenseKey, editionID, suffix string) ([]byte, error) {
 	u := fmt.Sprintf("%s?edition_id=%s&license_key=%s&suffix=%s", baseURL, editionID, licenseKey, suffix)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -44,8 +42,8 @@ func httpGet(ctx context.Context, licenseKey, suffix string) ([]byte, error) {
 
 // remoteSHA returns the published sha256 of the current tar.gz (first token of
 // the ".sha256" body, which is "<hex>  <filename>").
-func remoteSHA(ctx context.Context, licenseKey string) (string, error) {
-	b, err := httpGet(ctx, licenseKey, "tar.gz.sha256")
+func remoteSHA(ctx context.Context, licenseKey, editionID string) (string, error) {
+	b, err := httpGet(ctx, licenseKey, editionID, "tar.gz.sha256")
 	if err != nil {
 		return "", err
 	}
@@ -56,11 +54,11 @@ func remoteSHA(ctx context.Context, licenseKey string) (string, error) {
 	return f[0], nil
 }
 
-// Update downloads + extracts GeoLite2-City to dbPath when the local DB is
+// Update downloads + extracts the given MaxMind edition to dbPath when the local DB is
 // missing or the remote tar.gz.sha256 differs from the <dbPath>.sha256 sidecar.
 // Returns changed=true when it wrote a new DB.
-func Update(ctx context.Context, licenseKey, dbPath string) (bool, error) {
-	remote, err := remoteSHA(ctx, licenseKey)
+func Update(ctx context.Context, licenseKey, editionID, dbPath string) (bool, error) {
+	remote, err := remoteSHA(ctx, licenseKey, editionID)
 	if err != nil {
 		return false, fmt.Errorf("remote sha: %w", err)
 	}
@@ -71,7 +69,7 @@ func Update(ctx context.Context, licenseKey, dbPath string) (bool, error) {
 		}
 	}
 
-	gz, err := httpGet(ctx, licenseKey, "tar.gz")
+	gz, err := httpGet(ctx, licenseKey, editionID, "tar.gz")
 	if err != nil {
 		return false, fmt.Errorf("download: %w", err)
 	}
