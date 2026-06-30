@@ -119,8 +119,14 @@ func run(cmd *cobra.Command, _ []string) error {
 	if !cfg.GeoIPAutoUpdate || cfg.GeoIPLicenseKey == "" {
 		log.Warn().Bool("autoUpdate", cfg.GeoIPAutoUpdate).Bool("licenseKeySet", cfg.GeoIPLicenseKey != "").
 			Msg("geoip auto-update skipped (need GEOIP_AUTO_UPDATE=true + GEOIP_LICENSE_KEY); will use an existing DB if present")
-	} else if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, "GeoLite2-City", cfg.GeoIPPath); err != nil {
-		log.Warn().Err(err).Msg("geoip download failed; will use an existing DB if present")
+	} else {
+		if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, "GeoLite2-City", cfg.GeoIPPath); err != nil {
+			log.Warn().Err(err).Msg("geoip city download failed; will use an existing DB if present")
+		}
+		// AS-org DB: same license key + gate as City; best-effort (org is optional).
+		if _, err := geo.Update(ctx, cfg.GeoIPLicenseKey, "GeoLite2-ASN", cfg.GeoIPASNPath); err != nil {
+			log.Warn().Err(err).Msg("geoip ASN download failed; AS org will be blank")
+		}
 	}
 	resolver := geo.New()
 	if r, err := geo.Open(cfg.GeoIPPath); err != nil {
@@ -128,6 +134,13 @@ func run(cmd *cobra.Command, _ []string) error {
 	} else {
 		resolver = r
 		log.Info().Str("path", cfg.GeoIPPath).Msg("geoip database loaded")
+	}
+	// Attach the ASN reader so the callers list can show each IP's AS org.
+	// Independent of the City DB — tolerated if absent (org just stays blank).
+	if err := resolver.LoadASN(cfg.GeoIPASNPath); err != nil {
+		log.Warn().Err(err).Str("path", cfg.GeoIPASNPath).Msg("geoip ASN DB NOT loaded → AS org will be blank; set GEOIP_LICENSE_KEY or place a .mmdb at GEOIP_ASN_DB_PATH")
+	} else {
+		log.Info().Str("path", cfg.GeoIPASNPath).Msg("geoip ASN database loaded")
 	}
 	defer resolver.Close()
 
