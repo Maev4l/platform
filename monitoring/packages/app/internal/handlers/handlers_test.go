@@ -173,12 +173,14 @@ func TestCallersGrouping(t *testing.T) {
 		{"ip": "1.1.1.1", "requests": "10"},
 		{"ip": "2.2.2.2", "requests": "50"},
 		{"ip": "3.3.3.3", "requests": "20"},
-		{"ip": "9.9.9.9", "requests": "5"}, // unresolved → Unknown
+		{"ip": "9.9.9.9", "requests": "5"},   // unresolved → Unknown
+		{"ip": "1.1.1.0", "requests": "10"},  // ties with 1.1.1.1, lower IP should sort first
 	}
 	g := mapGeo{
 		"1.1.1.1": {City: "Lyon", Country: "FR", Lat: 45.7, Lng: 4.8},
 		"2.2.2.2": {City: "Paris", Country: "FR", Lat: 48.8, Lng: 2.3},
 		"3.3.3.3": {City: "Berlin", Country: "DE", Lat: 52.5, Lng: 13.4},
+		"1.1.1.0": {City: "Nice", Country: "FR", Lat: 43.7, Lng: 7.2},
 	}
 	w := do(newAPIGeo(rows, g), "/api/callers?source=bl-site&from=2026-06-01&to=2026-06-27")
 	if w.Code != 200 {
@@ -195,18 +197,21 @@ func TestCallersGrouping(t *testing.T) {
 			} `json:"ips"`
 		} `json:"groups"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &got)
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\nbody: %s", err, w.Body.Bytes())
+	}
 
 	// Alphabetical (DE, FR) then Unknown last.
 	if len(got.Groups) != 3 || got.Groups[0].Country != "DE" ||
 		got.Groups[1].Country != "FR" || got.Groups[2].Country != "Unknown" {
 		t.Fatalf("bad group order: %+v", got.Groups)
 	}
-	// FR group: requests-desc → Paris(50) before Lyon(10), city carried through.
+	// FR group: requests-desc → Paris(50) before tied IPs(10); lower IP wins tie; city carried through.
 	fr := got.Groups[1]
-	if fr.Count != 2 || len(fr.IPs) != 2 ||
+	if fr.Count != 3 || len(fr.IPs) != 3 ||
 		fr.IPs[0].IP != "2.2.2.2" || fr.IPs[0].Requests != 50 || fr.IPs[0].City != "Paris" ||
-		fr.IPs[1].IP != "1.1.1.1" {
+		fr.IPs[1].IP != "1.1.1.0" || fr.IPs[1].Requests != 10 || fr.IPs[1].City != "Nice" ||
+		fr.IPs[2].IP != "1.1.1.1" || fr.IPs[2].City != "Lyon" {
 		t.Fatalf("bad FR group: %+v", fr)
 	}
 	// Unknown group: the unresolved IP, empty city.
@@ -232,7 +237,9 @@ func TestCallersEmpty(t *testing.T) {
 	var got struct {
 		Groups []any `json:"groups"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &got)
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\nbody: %s", err, w.Body.Bytes())
+	}
 	if w.Code != 200 || len(got.Groups) != 0 {
 		t.Fatalf("want 200 + empty groups, got %d %+v", w.Code, got.Groups)
 	}
