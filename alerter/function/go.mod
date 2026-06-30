@@ -8,8 +8,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.26.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.5
 	github.com/sirupsen/logrus v1.9.0
-	github.com/slack-go/slack v0.12.2
+	github.com/slack-go/slack v0.27.0
 )
+
+// TEMP (removed in release Task 7): build against in-repo notifications so the
+// new Format field is available before notifications/v1.1.0 is tagged/pushed.
+replace github.com/Maev4l/platform/notifications => ../../notifications
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.24.0 // indirect
@@ -24,7 +28,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.21.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.5 // indirect
 	github.com/aws/smithy-go v1.19.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/yuin/goldmark v1.8.2 // indirect
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
 )
