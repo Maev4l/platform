@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 
-export const TopList = ({ state, summary }) => {
+export const TopList = ({ source, from, to, country, summary }) => {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState('Top URIs');
 
   useEffect(() => {
-    if (state.country) {
-      setTitle(`Top Callers · ${state.country}`);
-      api('/api/geo', { source: state.source, from: state.from, to: state.to, country: state.country })
+    if (country) {
+      setTitle(`Top Callers · ${country}`);
+      api('/api/geo', { source, from, to, country })
         // Guard against missing points array (e.g. empty/malformed API response)
         .then((d) => setItems((d?.points ?? []).slice(0, 12).map((p) => ({ label: p.ip, sub: p.city, n: p.requests }))))
         .catch((err) => console.error('geo drill fetch failed', err));
@@ -17,7 +17,7 @@ export const TopList = ({ state, summary }) => {
       setTitle('Top URIs');
       setItems((summary?.topUris ?? []).map((u) => ({ label: u.uri, sub: '', n: u.hits })));
     }
-  }, [state.country, state.source, state.from, state.to, summary]);
+  }, [country, source, from, to, summary]);
 
   const max = Math.max(1, ...items.map((i) => i.n));
   return (

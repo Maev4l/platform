@@ -1,61 +1,20 @@
-import { useEffect, useState } from 'react';
-import dayjs from 'dayjs';
-import { api } from '@/lib/api';
-import { Header } from '@/components/Header';
-import { Kpis } from '@/components/Kpis';
-import { GeoMap } from '@/components/GeoMap';
-import { Histogram } from '@/components/Histogram';
-import { StatusDonut } from '@/components/StatusDonut';
-import { TopList } from '@/components/TopList';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Layout } from '@/components/Layout';
+import Dashboard from '@/pages/Dashboard';
+import Callers from '@/pages/Callers';
 
-const today = dayjs().format('YYYY-MM-DD');
-const twoWeeksAgo = dayjs().subtract(14, 'day').format('YYYY-MM-DD');
-
+// BrowserRouter (clean URLs): the Go embed handler falls back to index.html for
+// unknown paths (internal/web/embed.go) and Vite dev serves the SPA entry, so
+// refresh / deep-link work in both dev and prod without a hash.
 export default function App() {
-  const [sources, setSources] = useState([]);
-  const [state, setState] = useState({ source: '', from: twoWeeksAgo, to: today, groupBy: 'day', country: '', range: 'Last 14 days' });
-  const [summary, setSummary] = useState(null);
-  const [countryCount, setCountryCount] = useState(0);
-
-  useEffect(() => {
-    api('/api/sources')
-      .then((s) => {
-        // Guard against non-array responses (e.g. unexpected API shape on error)
-        const arr = Array.isArray(s) ? s : [];
-        setSources(arr);
-        setState((st) => ({ ...st, source: st.source || arr[0] || '' }));
-      })
-      .catch((err) => console.error('sources fetch failed', err));
-  }, []);
-
-  useEffect(() => {
-    if (!state.source) return;
-    api('/api/summary', { source: state.source, from: state.from, to: state.to })
-      .then(setSummary)
-      .catch((err) => console.error('summary fetch failed', err));
-  }, [state.source, state.from, state.to]);
-
-  // "Countries" KPI is the count of countries in the IP-resolved world geo
-  // (matches the map's dots); the summary query no longer counts c-country.
-  useEffect(() => {
-    if (!state.source) return;
-    api('/api/geo', { source: state.source, from: state.from, to: state.to })
-      .then((d) => setCountryCount(d?.countries?.length ?? 0))
-      .catch((err) => console.error('country count fetch failed', err));
-  }, [state.source, state.from, state.to]);
-
   return (
-    <div className="flex h-screen flex-col">
-      <Header sources={sources} state={state} setState={setState} />
-      <main className="grid flex-1 grid-cols-[1fr_340px] grid-rows-[auto_1fr_auto] gap-3.5 p-4 min-h-0">
-        <div className="col-span-2"><Kpis summary={summary} countries={countryCount} /></div>
-        <GeoMap state={state} setState={setState} />
-        <aside className="flex flex-col gap-3.5 min-h-0">
-          <StatusDonut summary={summary} />
-          <TopList state={state} summary={summary} />
-        </aside>
-        <div className="col-span-2"><Histogram state={state} /></div>
-      </main>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="callers" element={<Callers />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }

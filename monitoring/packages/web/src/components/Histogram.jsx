@@ -10,7 +10,7 @@ const fmtBucket = (t) => (dayjs(t).isValid() ? dayjs(t).format('MMM D') : t);
 
 const COLORS = { s2: '#c8f135', s3: '#5b9bff', s4: '#ffb020', s5: '#ff5a5a' };
 
-export const Histogram = ({ state }) => {
+export const Histogram = ({ source, from, to, groupBy }) => {
   const ref = useRef(null);
   const chart = useRef(null);
 
@@ -23,12 +23,10 @@ export const Histogram = ({ state }) => {
   }, []);
 
   useEffect(() => {
-    if (!state.source) return;
-    api('/api/access', { source: state.source, from: state.from, to: state.to, groupBy: state.groupBy })
+    if (!source) return;
+    api('/api/access', { source, from, to, groupBy })
       .then((d) => {
-        // Guard against missing buckets (e.g. partial API response or network error shape)
         if (!d?.buckets) return;
-        // Guard against a disposed chart if the component unmounted while the request was in-flight
         if (!chart.current || chart.current.isDisposed()) return;
         const x = d.buckets.map((b) => fmtBucket(b.t));
         const series = ['s2', 's3', 's4', 's5'].map((k) => ({ name: k, type: 'bar', stack: 't', barWidth: '58%', data: d.buckets.map((b) => b[k]), itemStyle: { color: COLORS[k] } }));
@@ -41,7 +39,7 @@ export const Histogram = ({ state }) => {
         }, true);
       })
       .catch((err) => console.error('access fetch failed', err));
-  }, [state.source, state.from, state.to, state.groupBy]);
+  }, [source, from, to, groupBy]);
 
   return (
     <Card className="h-[188px] flex flex-col">

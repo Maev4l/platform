@@ -24,7 +24,7 @@ const countryOption = (data, center) => ({
   series: [{ type: 'effectScatter', coordinateSystem: 'geo', data, zlevel: 2, symbolSize: (v) => Math.max(5, Math.sqrt(v[2])), showEffectOn: 'render', rippleEffect: { brushType: 'stroke', scale: 2.2, period: 3.5 }, itemStyle: { color: CYAN, shadowBlur: 10, shadowColor: 'rgba(57,217,200,.7)' } }],
 });
 
-export const GeoMap = ({ state, setState }) => {
+export const GeoMap = ({ source, from, to, country, setCountry }) => {
   const ref = useRef(null);
   const chart = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export const GeoMap = ({ state, setState }) => {
       chart.current = echarts.init(ref.current);
       chart.current.on('click', (p) => {
         if (p.seriesType === 'effectScatter' && p.data?.code) {
-          setState((s) => ({ ...s, country: p.data.code }));
+          setCountry(p.data.code);
         }
       });
       setLoading(false);
@@ -46,38 +46,36 @@ export const GeoMap = ({ state, setState }) => {
     window.addEventListener('resize', onResize);
     // Cleanup: remove resize listener and dispose chart on unmount
     return () => { alive = false; window.removeEventListener('resize', onResize); chart.current?.dispose(); };
-  }, [setState]);
+  }, [setCountry]);
 
   useEffect(() => {
-    if (loading || !state.source) return;
+    if (loading || !source) return;
     const c = chart.current;
-    if (!state.country) {
-      api('/api/geo', { source: state.source, from: state.from, to: state.to })
+    if (!country) {
+      api('/api/geo', { source, from, to })
         .then((d) => {
-          // Guard against missing countries array and a disposed chart on fast unmount
           if (!c || c.isDisposed()) return;
           const data = (d?.countries ?? []).filter((x) => CENTROIDS[x.country]).map((x) => ({ name: CENTROIDS[x.country].name, code: x.country, value: [...CENTROIDS[x.country].coord, x.callers] }));
           c.setOption(worldOption(data), true);
         })
         .catch((err) => console.error('geo world fetch failed', err));
     } else {
-      api('/api/geo', { source: state.source, from: state.from, to: state.to, country: state.country })
+      api('/api/geo', { source, from, to, country })
         .then((d) => {
-          // Guard against missing points array and a disposed chart on fast unmount
           if (!c || c.isDisposed()) return;
           const data = (d?.points ?? []).map((p) => ({ name: `${p.city} · ${p.ip}`, value: [p.lng, p.lat, p.requests] }));
-          c.setOption(countryOption(data, CENTROIDS[state.country]?.coord || [0, 20]), true);
+          c.setOption(countryOption(data, CENTROIDS[country]?.coord || [0, 20]), true);
         })
         .catch((err) => console.error('geo drill fetch failed', err));
     }
-  }, [loading, state.source, state.from, state.to, state.country]);
+  }, [loading, source, from, to, country]);
 
   return (
     <Card className="relative flex flex-col min-h-0">
       <div className="flex items-center gap-3 border-b border-border px-3.5 py-2.5 font-mono text-[11px]">
-        {state.country && <Button variant="outline" size="sm" onClick={() => setState((s) => ({ ...s, country: '' }))}>◀ Back</Button>}
-        <span className={state.country ? 'text-muted-foreground' : 'text-signal uppercase tracking-[0.1em]'}>Global View</span>
-        {state.country && <><span className="text-muted-foreground">▸</span><span className="text-signal uppercase tracking-[0.1em]">{state.country}</span></>}
+        {country && <Button variant="outline" size="sm" onClick={() => setCountry('')}>◀ Back</Button>}
+        <span className={country ? 'text-muted-foreground' : 'text-signal uppercase tracking-[0.1em]'}>Global View</span>
+        {country && <><span className="text-muted-foreground">▸</span><span className="text-signal uppercase tracking-[0.1em]">{country}</span></>}
       </div>
       <div ref={ref} className="flex-1 min-h-0" />
     </Card>
