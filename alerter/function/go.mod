@@ -3,7 +3,7 @@ module isnan.eu/alerting
 go 1.26
 
 require (
-	github.com/Maev4l/platform/notifications v1.0.0
+	github.com/Maev4l/platform/notifications v1.1.0
 	github.com/aws/aws-lambda-go v1.40.0
 	github.com/aws/aws-sdk-go-v2/config v1.26.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.5
@@ -11,10 +11,6 @@ require (
 	github.com/slack-go/slack v0.27.0
 	github.com/yuin/goldmark v1.8.2
 )
-
-// TEMP (removed in release Task 7): build against in-repo notifications so the
-// new Format field is available before notifications/v1.1.0 is tagged/pushed.
-replace github.com/Maev4l/platform/notifications => ../../notifications
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.24.0 // indirect
