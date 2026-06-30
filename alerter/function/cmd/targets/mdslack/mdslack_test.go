@@ -80,3 +80,26 @@ func TestRender_LongTextSplitsSections(t *testing.T) {
 		t.Fatalf("expected >=3 sections for 7000 chars, got %d", len(blocks))
 	}
 }
+
+func TestPlainSections_SplitsLongText(t *testing.T) {
+	// >3000 chars must split into multiple plain_text section blocks so Slack
+	// does not reject the post (which would drop the alert).
+	blocks := PlainSections(strings.Repeat("a", 7000))
+	if len(blocks) < 3 {
+		t.Fatalf("expected >=3 plain sections for 7000 chars, got %d", len(blocks))
+	}
+	b, err := json.Marshal(blocks)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"type":"plain_text"`) {
+		t.Fatalf("expected plain_text sections: %s", string(b))
+	}
+}
+
+func TestPlainSections_ShortTextSingleBlock(t *testing.T) {
+	blocks := PlainSections("*.isnan.eu renewed")
+	if len(blocks) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(blocks))
+	}
+}

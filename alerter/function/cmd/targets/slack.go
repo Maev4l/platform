@@ -62,28 +62,25 @@ func buildMessageBlocks(alert *notifications.Message) []slack.Block {
 }
 
 // bodyBlocks renders the content. "plain" sends literal text; otherwise Markdown,
-// falling back to a literal section so an alert is never dropped.
+// falling back to literal sections so an alert is never dropped. Plain content is
+// split on Slack's 3000-char section limit (via mdslack.PlainSections) so large
+// plain/fallback payloads are not rejected by the API.
 func bodyBlocks(alert *notifications.Message) []slack.Block {
 	if alert.Format == "plain" {
-		return []slack.Block{plainSection(alert.Content)}
+		return mdslack.PlainSections(alert.Content)
 	}
 	blocks, err := mdslack.Render(alert.Content)
 	// Distinguish the two fallback triggers so operators aren't shown a
 	// "<nil>" error when the cause is simply empty/unrenderable content.
 	if err != nil {
 		log.Warnf("Markdown render error, falling back to plain text: %v", err)
-		return []slack.Block{plainSection(alert.Content)}
+		return mdslack.PlainSections(alert.Content)
 	}
 	if len(blocks) == 0 {
 		log.Warn("Markdown render produced no blocks, falling back to plain text")
-		return []slack.Block{plainSection(alert.Content)}
+		return mdslack.PlainSections(alert.Content)
 	}
 	return blocks
-}
-
-// plainSection wraps a string in a plain_text section block.
-func plainSection(s string) slack.Block {
-	return slack.NewSectionBlock(slack.NewTextBlockObject(slack.PlainTextType, s, false, false), nil, nil)
 }
 
 func (n slackNotifier) SendAlert(alert *notifications.Message) error {

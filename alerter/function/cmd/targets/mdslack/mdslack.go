@@ -201,10 +201,24 @@ func codeText(n ast.Node, src []byte) string {
 
 // sectionsFromText wraps text in one or more mrkdwn section blocks under the limit.
 func sectionsFromText(s string) []slack.Block {
+	return sectionsOfType(s, slack.MarkdownType)
+}
+
+// PlainSections wraps literal text in one or more plain_text section blocks,
+// splitting on Slack's 3000-char section limit. Used for the format:"plain"
+// path and as the Markdown fallback so large content is never rejected by
+// Slack — i.e. an alert is never dropped.
+func PlainSections(s string) []slack.Block {
+	return sectionsOfType(s, slack.PlainTextType)
+}
+
+// sectionsOfType splits s under the section limit and wraps each chunk in a
+// section block of the given text-object type (mrkdwn or plain_text).
+func sectionsOfType(s, objType string) []slack.Block {
 	var blocks []slack.Block
 	for _, chunk := range splitChars(s, maxSectionChars) {
 		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject(slack.MarkdownType, chunk, false, false), nil, nil))
+			slack.NewTextBlockObject(objType, chunk, false, false), nil, nil))
 	}
 	return blocks
 }
