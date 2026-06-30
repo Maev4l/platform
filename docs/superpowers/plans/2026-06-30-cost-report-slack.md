@@ -713,9 +713,11 @@ func main() {
 
 Run:
 ```bash
-cd cost-report/function && go mod tidy && go build ./... && go test ./cmd/ -v
+cd cost-report/function && go mod tidy && go build -o /dev/null ./cmd && go test ./cmd/ -v
 ```
 Expected: build succeeds; all tests PASS.
+(Note: use `go build -o /dev/null ./cmd`, not `go build ./...` — the latter tries
+to write a binary named `cmd`, colliding with the `cmd/` directory.)
 
 - [ ] **Step 3: Verify the package builds**
 
@@ -996,7 +998,7 @@ git commit -m "docs(cost-report): add root makefile and readme"
 
 Run:
 ```bash
-cd cost-report/function && go build ./... && go test ./cmd/ -v && golangci-lint run ./... && gofmt -l .
+cd cost-report/function && go build -o /dev/null ./cmd && go test ./cmd/ -v && golangci-lint run ./... && gofmt -l .
 ```
 Expected: build OK, tests PASS, lint clean, `gofmt -l .` prints nothing.
 
