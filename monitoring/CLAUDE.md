@@ -63,6 +63,11 @@ organization per IP from the ASN database (`GEOIP_ASN_DB_PATH`).
   the binary, and runs it (real UI, auto-port, opens the browser). Loads
   `packages/app/.env`.
 - `make backend-build` — build SPA, embed it, build the binary (no run)
+- `make install` / `make uninstall` — symlink `packages/app/bin/monitoring` into
+  `~/.local/bin` (user-writable, no sudo; ensure it's on your PATH). A link, not a
+  copy, so every `backend-build` is picked up with no re-install. The installed
+  binary does NOT source `packages/app/.env` (that's `make run`); provide
+  `MONITORING_*`/`GEOIP_*` via your shell environment.
 - Hot-reload dev (two terminals): `make backend-run` (API on :8080) +
   `make frontend-serve` (Vite on :5180, proxies /api → :8080); open :5180.
 - `make infra-plan` / `make infra-apply` / `make infra-output`
