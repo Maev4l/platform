@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.40.0
 	github.com/aws/aws-sdk-go-v2/config v1.26.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.5
-	github.com/sirupsen/logrus v1.9.0
+	github.com/rs/zerolog v1.35.1
 	github.com/slack-go/slack v0.27.0
 	github.com/yuin/goldmark v1.8.2
 )
@@ -27,5 +27,7 @@ require (
 	github.com/aws/smithy-go v1.19.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 )

@@ -7,7 +7,7 @@ import (
 	"github.com/Maev4l/platform/notifications"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 	"isnan.eu/alerting/cmd/targets/mdslack"
 )
@@ -21,7 +21,7 @@ var channelId string = os.Getenv("SLACK_CHANNEL_ID")
 func getSlackTokenFromSSM() string {
 	cfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		log.Fatalf("Unable to load AWS SDK config: %v", err)
+		log.Fatal().Err(err).Msg("Unable to load AWS SDK config")
 	}
 
 	ssmClient := ssm.NewFromConfig(cfg)
@@ -33,7 +33,7 @@ func getSlackTokenFromSSM() string {
 
 	result, err := ssmClient.GetParameter(context.Background(), input)
 	if err != nil {
-		log.Fatalf("Failed to get Slack token from SSM parameter %s: %v", slackTokenParam, err)
+		log.Fatal().Err(err).Str("parameter", slackTokenParam).Msg("Failed to get Slack token from SSM")
 	}
 
 	return *result.Parameter.Value
@@ -73,11 +73,11 @@ func bodyBlocks(alert *notifications.Message) []slack.Block {
 	// Distinguish the two fallback triggers so operators aren't shown a
 	// "<nil>" error when the cause is simply empty/unrenderable content.
 	if err != nil {
-		log.Warnf("Markdown render error, falling back to plain text: %v", err)
+		log.Warn().Err(err).Msg("Markdown render error, falling back to plain text")
 		return mdslack.PlainSections(alert.Content)
 	}
 	if len(blocks) == 0 {
-		log.Warn("Markdown render produced no blocks, falling back to plain text")
+		log.Warn().Msg("Markdown render produced no blocks, falling back to plain text")
 		return mdslack.PlainSections(alert.Content)
 	}
 	return blocks
@@ -90,7 +90,7 @@ func (n slackNotifier) SendAlert(alert *notifications.Message) error {
 	blocks := buildMessageBlocks(alert)
 	_, _, err := n.slackClient.PostMessage(channelId, slack.MsgOptionBlocks(blocks...))
 	if err != nil {
-		log.Errorf("Failed to send alert to %s", n.name)
+		log.Error().Err(err).Str("target", n.name).Msg("Failed to send alert")
 		return err
 	}
 	return nil

@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os"
 
 	"github.com/Maev4l/platform/notifications"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"isnan.eu/alerting/cmd/targets"
 )
 
@@ -22,19 +22,19 @@ func handler(ctx context.Context, snsEvent events.SNSEvent) {
 
 		err := json.Unmarshal([]byte(snsRecord.Message), message)
 		if err != nil {
-			log.Errorf("Failed to unmarshall SNS event message: %v", err.Error())
+			log.Error().Err(err).Msg("Failed to unmarshall SNS event message")
 			return
 		}
 		target, ok := TARGETS[message.Target]
 		if ok {
 			err = target.SendAlert(message)
 			if err != nil {
-				log.Errorf("Failed to send message to %s", message.Target)
+				log.Error().Err(err).Str("target", message.Target).Msg("Failed to send message")
 				return
 			}
-			log.Debugf("Message from %s sent to %s", message.Source, message.Target)
+			log.Debug().Str("source", message.Source).Str("target", message.Target).Msg("Message sent")
 		} else {
-			log.Warnf("Target %s is not registered", message.Target)
+			log.Warn().Str("target", message.Target).Msg("Target is not registered")
 			return
 		}
 	}
@@ -46,7 +46,10 @@ func registerTargets() {
 }
 
 func main() {
-	log.SetOutput(os.Stdout)
+	// Match the platform-wide zerolog convention (see cost-report): compact
+	// unix timestamps; the default global logger already emits to stderr with a
+	// timestamp field, both of which CloudWatch captures.
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	registerTargets()
 	lambda.Start(handler)
 }
