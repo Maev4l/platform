@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +50,49 @@ func TestMessage_FormatField(t *testing.T) {
 	}
 	if old.Format != "" {
 		t.Fatalf("expected empty Format for old message, got %q", old.Format)
+	}
+}
+
+func TestMessage_InteractiveOmittedWhenNil(t *testing.T) {
+	// A message with no Interactive block must serialise byte-identically to v1.1.0.
+	m := Message{Target: "slack", Source: "svc", SourceDescription: "desc", Content: "hi"}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	want := `{"target":"slack","source":"svc","sourceDescription":"desc","content":"hi"}`
+	if string(b) != want {
+		t.Fatalf("wire mismatch:\n got=%s\nwant=%s", b, want)
+	}
+}
+
+func TestMessage_InteractiveRoundTrip(t *testing.T) {
+	m := Message{
+		Target: "slack", Source: "idp", SourceDescription: "IdP", Content: "Approve?",
+		Interactive: &Interactive{
+			CallbackID: "req-1",
+			Payload:    "token-abc",
+			Actions: []Action{
+				{ID: "approve", Label: "OK", Style: "primary"},
+				{ID: "reject", Label: "Cancel", Style: "danger"},
+			},
+		},
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// omitempty on Payload/Style must not drop the set values.
+	if !strings.Contains(string(b), `"interactive":{"callbackId":"req-1","payload":"token-abc"`) {
+		t.Fatalf("interactive not serialised: %s", b)
+	}
+	var rt Message
+	if err := json.Unmarshal(b, &rt); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Pointer field => compare via re-marshal, not struct equality.
+	rb, _ := json.Marshal(rt)
+	if string(rb) != string(b) {
+		t.Fatalf("round-trip mismatch:\n got=%s\nwant=%s", rb, b)
 	}
 }
