@@ -71,8 +71,10 @@ func main() {
 			event.UserName,
 			groupName,
 		)
+		// Markdown: fence the email (may contain _) and put the CLI command in a
+		// code block so the admin can copy-paste it straight from Slack.
 		content := fmt.Sprintf(
-			"User %s requesting access to %s - Approve with: %s",
+			"# 🔐 Access Request\n\n- **User:** `%s`\n- **App:** %s\n\nApprove with:\n```\n%s\n```",
 			event.Email,
 			appName,
 			awsCliCmd,
@@ -85,9 +87,8 @@ func main() {
 			SourceDescription: fmt.Sprintf("%s user sign up", appName),
 			Target:            "slack",
 			Content:           content,
-			// Pin plain rendering: content embeds literal CLI commands and
-			// identifiers; the alerter now defaults to Markdown.
-			Format: "plain",
+			// Markdown: header + bullets, CLI command fenced as a code block.
+			Format: "markdown",
 		}, true
 	}
 
@@ -100,8 +101,10 @@ func main() {
 			event.UserName,
 			appConfig.ApprovedGroup,
 		)
+		// Markdown: fence the email (may contain _) and put the CLI command in a
+		// code block so the admin can copy-paste it straight from Slack.
 		content := fmt.Sprintf(
-			"User %s requesting access to %s - Approve with: %s",
+			"# 🔐 Access Request\n\n- **User:** `%s`\n- **App:** %s\n\nApprove with:\n```\n%s\n```",
 			event.Email,
 			appConfig.AppName,
 			awsCliCmd,
@@ -111,9 +114,8 @@ func main() {
 			SourceDescription: fmt.Sprintf("%s access request", appConfig.AppName),
 			Target:            "slack",
 			Content:           content,
-			// Pin plain rendering: content embeds literal CLI commands and
-			// identifiers; the alerter now defaults to Markdown.
-			Format: "plain",
+			// Markdown: header + bullets, CLI command fenced as a code block.
+			Format: "markdown",
 		}, true
 	}
 
