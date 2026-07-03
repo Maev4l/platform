@@ -8,6 +8,8 @@ Weekly AWS Cost Explorer summary delivered to Slack via the shared
 A Go Lambda (`platform-cost-report`) queries Cost Explorer, renders a Markdown
 summary, and publishes a `notifications.Message{target:"slack", format:"markdown"}`
 to the `alerting-events` SNS topic. The `alerter` Lambda renders it to Slack.
+If the Cost Explorer query fails, a Markdown failure alert is published instead so
+the error surfaces in Slack rather than failing silently.
 
 ## Metrics
 

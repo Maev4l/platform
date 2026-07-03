@@ -18,9 +18,11 @@ import (
 )
 
 const (
-	source      = "cost-report"
-	ceRegion    = "us-east-1" // Cost Explorer is a global service reached via us-east-1
-	failureText = "AWS Cost Report failed to generate — check CloudWatch logs for cost-report."
+	source   = "cost-report"
+	ceRegion = "us-east-1" // Cost Explorer is a global service reached via us-east-1
+	// Markdown to match the alerter's default rendering (same as the report path).
+	// The service name is fenced as inline code so it reads as a literal, not prose.
+	failureText = "# 💸 AWS Cost Report — Failed\n\nFailed to generate the report — check the CloudWatch logs for `cost-report`."
 )
 
 // snsPublisher is the subset of the SNS client we use (small interface keeps
@@ -70,7 +72,7 @@ func handler(ctx context.Context) error {
 	if err != nil {
 		log.Error().Err(err).Msg("failed to fetch cost report")
 		// Surface the failure in Slack rather than failing silently.
-		if perr := publish(ctx, snsClient, topicArn, failureText, "plain"); perr != nil {
+		if perr := publish(ctx, snsClient, topicArn, failureText, "markdown"); perr != nil {
 			log.Error().Err(perr).Msg("failed to publish failure alert")
 		}
 		return err
