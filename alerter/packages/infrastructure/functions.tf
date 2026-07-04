@@ -61,11 +61,26 @@ module "responder_function" {
   additional_policy_arns = [aws_iam_policy.responder.arn]
 }
 
-# CloudFront origin for Slack's interactivity webhook. AWS_IAM (not NONE) so that
-# ONLY the CloudFront distribution may invoke it (via OAC — see cdn.tf); the raw
-# *.lambda-url URL is not directly callable. Slack points at the custom domain
-# platform-slack-responder.isnan.eu. The invoke permission + OAC live in cdn.tf.
+# CloudFront origin for Slack's interactivity webhook. AuthType NONE (public):
+# CloudFront OAC cannot SigV4-sign a POST *body* to a Lambda Function URL, so an
+# AWS_IAM URL rejects every Slack interactivity POST with InvalidSignatureException
+# (403). The request is instead authenticated in-code by the responder's Slack
+# signing-secret HMAC (verifySignature) + operator allow-list — the correct control
+# for a Slack webhook. CloudFront (see cdn.tf) only provides the stable custom
+# domain platform-slack-responder.isnan.eu.
 resource "aws_lambda_function_url" "responder" {
   function_name      = module.responder_function.function_name
-  authorization_type = "AWS_IAM"
+  authorization_type = "NONE"
+}
+
+# A NONE (public) Function URL still needs an explicit resource policy allowing
+# lambda:InvokeFunctionUrl for principal "*" — Terraform's aws_lambda_function_url
+# does not create it, and without it the URL returns 403. Safe here: the responder
+# authenticates every request in-code via the Slack signature + operator allow-list.
+resource "aws_lambda_permission" "responder_public" {
+  statement_id           = "AllowPublicFunctionUrlInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.responder_function.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }

@@ -3,14 +3,16 @@
 #
 # Why CloudFront: (1) a stable URL decoupled from the AWS-generated Function URL id
 # (which only changes if the function is recreated), so Slack's Request URL never has
-# to be reconfigured; (2) origin lock-down — the Function URL is AWS_IAM and only this
-# distribution (via OAC) may invoke it, so the raw *.lambda-url URL is uninvokable
-# directly; (3) a natural place to attach WAF/rate-limiting later.
+# to be reconfigured; (2) a natural place to attach WAF/rate-limiting later.
 #
-# OAC signs origin requests with SigV4 but uses UNSIGNED-PAYLOAD for POST bodies. That
-# is fine here: Lambda IAM auth still authenticates the caller, and body integrity is
-# covered by TLS + the in-code Slack signature check. Operator must verify the Slack
-# interactivity handshake succeeds through this domain at first deploy.
+# NO OAC / no origin signing. CloudFront OAC cannot SigV4-sign a POST *body* to a
+# Lambda Function URL, so an AWS_IAM origin rejects every Slack interactivity POST
+# with InvalidSignatureException (403). The Function URL is therefore AuthType NONE
+# and CloudFront just proxies; the request is authenticated in-code by the responder's
+# Slack signing-secret HMAC (verifySignature) + operator allow-list, which is the
+# correct control for a Slack webhook (unsigned requests get 401). The raw *.lambda-url
+# is publicly reachable but useless without a valid Slack signature. Operator must
+# verify the Slack interactivity POST succeeds through this domain at first deploy.
 
 locals {
   responder_domain = "platform-slack-responder.isnan.eu"
@@ -28,15 +30,6 @@ data "aws_route53_zone" "isnan" {
   name = "isnan.eu"
 }
 
-# OAC makes CloudFront sign origin requests so the AWS_IAM Function URL accepts them.
-resource "aws_cloudfront_origin_access_control" "responder" {
-  name                              = "platform-notifier-responder-oac"
-  description                       = "Sign requests to the responder Lambda Function URL"
-  origin_access_control_origin_type = "lambda"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
 resource "aws_cloudfront_distribution" "responder" {
   enabled         = true
   comment         = "platform-notifier-responder (Slack interactivity)"
@@ -47,8 +40,6 @@ resource "aws_cloudfront_distribution" "responder" {
   origin {
     origin_id   = "responder-lambda-url"
     domain_name = replace(replace(aws_lambda_function_url.responder.function_url, "https://", ""), "/", "")
-
-    origin_access_control_id = aws_cloudfront_origin_access_control.responder.id
 
     custom_origin_config {
       origin_protocol_policy = "https-only"
@@ -82,16 +73,6 @@ resource "aws_cloudfront_distribution" "responder" {
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
-}
-
-# Only this distribution may invoke the AWS_IAM Function URL (OAC-signed requests).
-resource "aws_lambda_permission" "responder_cloudfront" {
-  statement_id           = "AllowCloudFrontInvoke"
-  action                 = "lambda:InvokeFunctionUrl"
-  function_name          = module.responder_function.function_name
-  principal              = "cloudfront.amazonaws.com"
-  source_arn             = aws_cloudfront_distribution.responder.arn
-  function_url_auth_type = "AWS_IAM"
 }
 
 resource "aws_route53_record" "responder" {
