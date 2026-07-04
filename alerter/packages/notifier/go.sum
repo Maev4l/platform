@@ -1,5 +1,5 @@
-github.com/Maev4l/platform/notifications v1.1.0 h1:k5AbcCCv7jGRALsaSMIShyWMtUNdyctymZhHSzl1geE=
-github.com/Maev4l/platform/notifications v1.1.0/go.mod h1:+P2IYhheFNlj9Ox01plobsdMJrDAka+eG/5VSk43YWM=
+github.com/Maev4l/platform/notifications v1.2.0 h1:MxZPd7BznzkO9hP0qbn49trHPuyLvVe8X2jJ1uTLjUE=
+github.com/Maev4l/platform/notifications v1.2.0/go.mod h1:+P2IYhheFNlj9Ox01plobsdMJrDAka+eG/5VSk43YWM=
 github.com/aws/aws-lambda-go v1.40.0 h1:6dKcDpXsTpapfCFF6Debng6CiV/Z3sNHekM6bwhI2J0=
 github.com/aws/aws-lambda-go v1.40.0/go.mod h1:jwFe2KmMsHmffA1X2R09hH6lFzJQxzI8qK17ewzbQMM=
 github.com/aws/aws-sdk-go-v2 v1.24.0 h1:890+mqQ+hTpNuw0gGP6/4akolQkSToDJgHfQE7AwGuk=

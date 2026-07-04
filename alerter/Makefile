@@ -1,14 +1,18 @@
 .PHONY: backend-deploy infra-plan infra-apply
 
-FUNCTION := function
-INFRA    := infrastructure
+NOTIFIER  := packages/notifier
+RESPONDER := packages/responder
+INFRA     := packages/infrastructure
 
-# Full deploy: package the zip (delegates to the function Makefile), then apply the infra.
+# Full deploy: package both zips, then apply the infra.
 backend-deploy:
-	$(MAKE) -C $(FUNCTION) package
+	$(MAKE) -C $(NOTIFIER) package
+	$(MAKE) -C $(RESPONDER) package
 	$(MAKE) infra-apply
 
 infra-plan:
+	$(MAKE) -C $(NOTIFIER) package
+	$(MAKE) -C $(RESPONDER) package
 	terraform -chdir=$(INFRA) plan
 
 infra-apply:

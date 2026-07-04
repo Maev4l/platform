@@ -1,9 +1,9 @@
-module isnan.eu/alerting
+module isnan.eu/notifier
 
 go 1.26
 
 require (
-	github.com/Maev4l/platform/notifications v1.1.0
+	github.com/Maev4l/platform/notifications v1.2.0
 	github.com/aws/aws-lambda-go v1.40.0
 	github.com/aws/aws-sdk-go-v2/config v1.26.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.5
