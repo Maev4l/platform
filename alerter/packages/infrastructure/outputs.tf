@@ -1,5 +1,10 @@
+output "responder_public_url" {
+  description = "Slack app Interactivity Request URL (stable custom domain fronting the responder)"
+  value       = "https://${local.responder_domain}/"
+}
+
 output "responder_function_url" {
-  description = "Set this as the Slack app Interactivity Request URL"
+  description = "Raw Lambda Function URL (CloudFront origin only; AWS_IAM — not directly invokable). For debugging."
   value       = aws_lambda_function_url.responder.function_url
 }
 

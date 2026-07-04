@@ -27,6 +27,20 @@ provider "aws" {
   }
 }
 
+# CloudFront viewer certificates must live in us-east-1, so the responder's custom
+# domain (cdn.tf) resolves its ACM cert through this aliased provider.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      application = "platform-alerter"
+      owner       = "terraform"
+    }
+  }
+}
+
 locals {
   slack_token_param_name          = "slack.alerting.token"
   slack_signing_secret_param_name = "slack.alerting.signing_secret"

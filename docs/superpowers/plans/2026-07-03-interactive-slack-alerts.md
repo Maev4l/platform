@@ -60,12 +60,13 @@ alerter/
     │       ├── respond.go                # response_url message builders (confirm / ephemeral)
     │       └── respond_test.go
     └── infrastructure/                   # moved from alerter/infrastructure/
-        ├── main.tf                       # terraform/provider/locals/data only
-        ├── functions.tf                  # BOTH Lambdas: notifier module + sns_trigger, responder module + function URL + permission
+        ├── main.tf                       # terraform/provider (+ us-east-1 alias)/locals/data
+        ├── functions.tf                  # BOTH Lambdas: notifier module + sns_trigger, responder module + function URL
+        ├── cdn.tf                        # responder custom domain: CloudFront + OAC + ACM/Route53 + CF invoke permission
         ├── sns.tf                        # + alerting_responses topic, policy (ARN via output, not an SSM param)
         ├── iam.tf                        # + responder policy (SSM read + sns:Publish)
         ├── variables.tf                  # unchanged
-        └── outputs.tf                    # NEW: function URL + responses topic ARN
+        └── outputs.tf                    # responder_public_url (custom domain) + raw function URL + responses topic ARN
 ```
 
 The context struct is duplicated across the two modules (notifier encodes, responder decodes) — it is 3 fields; a shared module for it is not worth the coupling (YAGNI).
@@ -1204,10 +1205,11 @@ git commit -m "feat(responder): wire signature check, authz, publish, and messag
 > - Both Lambda modules consolidated into **`functions.tf`** (notifier `alerter_function` + `sns_trigger`; responder `responder_function` + `aws_lambda_function_url` + `aws_lambda_permission`). No standalone `responder.tf`; the notifier modules moved out of `main.tf`.
 > - The topic-ARN discovery **`aws_ssm_parameter "responses_topic_arn"` was dropped** — producers read the `responses_topic_arn` output or resolve `data "aws_sns_topic" { name = "alerting-responses" }` in their own stack.
 > - Lambda env vars are unchanged: they carry SSM parameter **names** (not secret values); Lambdas fetch the values from SSM at startup.
+> - **Security hardening + stable custom domain (`cdn.tf`):** the responder Function URL is now `authorization_type = "AWS_IAM"` (was `NONE`) and `reserved_concurrent_executions = 5`. It is fronted by **CloudFront** at the stable domain **`platform-slack-responder.isnan.eu`** (Route53 A/AAAA alias + `*.isnan.eu` ACM cert in us-east-1 via an aliased provider). Origin Access Control (`origin_type = "lambda"`, sigv4) signs origin requests; an `aws_lambda_permission` grants `cloudfront.amazonaws.com` invoke scoped to the distribution ARN, so ONLY CloudFront can reach the Function URL. Managed policies: `CachingDisabled` + `AllViewerExceptHostHeader`. Slack's Request URL = the `responder_public_url` output. (OAC uses UNSIGNED-PAYLOAD for POST bodies — fine: IAM auth + TLS + in-code Slack signature cover it; verify the Slack handshake through the domain at first deploy.)
 
 **Files:**
 - Modify: `alerter/packages/infrastructure/sns.tf`, `alerter/packages/infrastructure/iam.tf`, `alerter/packages/infrastructure/main.tf`
-- Create: `alerter/packages/infrastructure/functions.tf`, `alerter/packages/infrastructure/outputs.tf`
+- Create: `alerter/packages/infrastructure/functions.tf`, `alerter/packages/infrastructure/cdn.tf`, `alerter/packages/infrastructure/outputs.tf`
 
 **Interfaces:**
 - Consumes: `module.alerter_function` (existing), `data.aws_caller_identity.current`, `local.slack_token_param_name`.

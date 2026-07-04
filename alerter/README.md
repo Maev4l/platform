@@ -9,15 +9,25 @@ alerter/
 ├── packages
 │     ├── notifier       # Lambda: alerting-events SNS -> Slack message (+ buttons)
 │     ├── responder      # Lambda: Slack interactivity Function URL -> alerting-responses SNS
-│     └── infrastructure # Terraform: SNS topics, both Lambdas, Function URL, IAM
+│     └── infrastructure # Terraform: SNS topics, both Lambdas, responder CDN, IAM
 ├── Makefile             # root orchestrator: packages both zips, then applies infra
 └── README.md
 ```
 
 - `notifier` renders alert messages (Markdown + optional action buttons) and posts to Slack.
-- `responder` receives Slack button clicks over its Function URL, verifies the request
-  signature, checks the clicking user against an allow-list, and relays the decision to
-  the `alerting-responses` SNS topic.
+- `responder` receives Slack button clicks, verifies the request signature, checks the
+  clicking user against an allow-list, and relays the decision to the `alerting-responses`
+  SNS topic.
+
+### Responder endpoint
+
+Slack calls the responder at the stable custom domain
+**`https://platform-slack-responder.isnan.eu/`** (CloudFront → the responder's Lambda
+Function URL). CloudFront gives a URL that never changes even if the underlying Function
+URL id is regenerated, and locks the origin: the Function URL is `AWS_IAM`-auth and only
+the CloudFront distribution may invoke it (via Origin Access Control), so the raw
+`*.lambda-url.on.aws` URL is not directly reachable. Defense-in-depth on top of the in-code
+Slack signature check.
 
 ## Message contract
 
@@ -100,5 +110,8 @@ data "aws_sns_topic" "alerting_responses" {
 
 ### One-time Slack setup
 
-1. `terraform output responder_function_url` → set it as **Interactivity → Request URL** in the Slack app.
+1. Set the Slack app **Interactivity → Request URL** to `https://platform-slack-responder.isnan.eu/`
+   (also available as the `responder_public_url` Terraform output). CloudFront + the DNS record
+   must be deployed first, and the responder must be reachable, so that Slack's URL-verification
+   handshake succeeds when you save.
 2. SSM params (SecureString): `slack.alerting.signing_secret` (app signing secret), `slack.alerting.operators` (comma-separated `U…` user IDs).

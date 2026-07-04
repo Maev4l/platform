@@ -61,18 +61,11 @@ module "responder_function" {
   additional_policy_arns = [aws_iam_policy.responder.arn]
 }
 
-# Public HTTPS endpoint for Slack's interactivity request URL. Security is the
-# Slack request signature (verified in-code), so no AWS auth on the URL itself.
+# CloudFront origin for Slack's interactivity webhook. AWS_IAM (not NONE) so that
+# ONLY the CloudFront distribution may invoke it (via OAC — see cdn.tf); the raw
+# *.lambda-url URL is not directly callable. Slack points at the custom domain
+# platform-slack-responder.isnan.eu. The invoke permission + OAC live in cdn.tf.
 resource "aws_lambda_function_url" "responder" {
   function_name      = module.responder_function.function_name
-  authorization_type = "NONE"
-}
-
-# AuthType NONE still requires an explicit invoke permission.
-resource "aws_lambda_permission" "responder_url" {
-  statement_id           = "AllowFunctionURLInvoke"
-  action                 = "lambda:InvokeFunctionUrl"
-  function_name          = module.responder_function.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+  authorization_type = "AWS_IAM"
 }

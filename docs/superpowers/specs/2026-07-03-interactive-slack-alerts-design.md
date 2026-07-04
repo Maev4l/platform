@@ -35,7 +35,8 @@ back into AWS, which does not exist yet.
 | Button styling | Producer's responsibility (per-button `style` in the message) |
 | Unauthorized click | **Ephemeral** rejection; original alert + buttons left intact |
 | Anti-double-click | Level 1 only — remove buttons on success via `replace_original`; stateless |
-| Inbound compute | Lambda **Function URL** (not API Gateway/LWA) |
+| Inbound compute | Lambda **Function URL** (not API Gateway/LWA), fronted by CloudFront (below) |
+| Responder endpoint | Stable custom domain `platform-slack-responder.isnan.eu` → CloudFront → Function URL. Function URL is `AWS_IAM`; only CloudFront (via OAC) may invoke it — raw `*.lambda-url` URL not directly reachable |
 | Project layout | `packages/{notifier, responder, infrastructure}` (platform convention) |
 | Channel abstraction | Removed — Slack is the only channel; no `Target` interface/registry |
 
@@ -84,7 +85,7 @@ Slack is the only channel, so the multi-target indirection is dead weight. In th
 Producer → SNS alerting_events → notifier (SNS consumer) → Slack message + buttons
                                                                 │ user clicks
                                                                 ▼
-Slack ──POST──► Lambda Function URL ──► responder
+Slack ─POST→ platform-slack-responder.isnan.eu ─► CloudFront ─(OAC/AWS_IAM)─► Function URL ─► responder
                                           ├─ verify signature (replay-safe, ≤5 min)
                                           ├─ check user allow-list
                                           ├─ publish → SNS alerting_responses ──► producer
@@ -229,7 +230,17 @@ Same path convention and decrypt-on-read as the existing `slack.alerting.token`.
   granting producers `sns:Subscribe` (producers self-subscribe from their own stacks;
   they discover the ARN via the output or a `data "aws_sns_topic"` lookup)
 - `platform-notifier-responder` Lambda (arm64, zip, `provided.al2023`) + `aws_lambda_function_url`
-  (AuthType `NONE`; + URL output for Slack config)
+  (AuthType **`AWS_IAM`**) — `reserved_concurrent_executions = 5` caps the public path
+- **CloudFront + custom domain** (`cdn.tf`): `platform-slack-responder.isnan.eu` → CloudFront →
+  the Function URL origin. Origin Access Control (`origin_type = "lambda"`, sigv4) signs origin
+  requests so the `AWS_IAM` Function URL accepts only this distribution; an `aws_lambda_permission`
+  grants `cloudfront.amazonaws.com` invoke scoped to the distribution ARN. Managed cache policy
+  `CachingDisabled` + origin-request policy `AllViewerExceptHostHeader` (forward Slack signature
+  headers + body, drop Host). Viewer cert = `*.isnan.eu` ACM (us-east-1, via aliased provider);
+  Route53 A/AAAA alias → CloudFront. Output `responder_public_url` = the Slack Request URL.
+  (OAC signs origin requests with UNSIGNED-PAYLOAD for POST bodies — fine here: IAM auth still
+  authenticates, and body integrity is covered by TLS + the in-code Slack signature. Verify the
+  Slack interactivity handshake through the domain at first deploy.)
 - IAM for the responder role: `sns:Publish` to `alerting_responses`, SSM read for the two
   new params (no bot token — the responder posts via the pre-authorized `response_url`)
 - Existing `platform-notifier` (notifier) zip/hash paths repointed to `../notifier/…`
@@ -259,7 +270,8 @@ Unit tests:
 
 ## One-time manual Slack setup (document in `alerter/README.md`)
 
-1. Enable **Interactivity** in the Slack app; set Request URL = the Function URL output.
+1. Enable **Interactivity** in the Slack app; set Request URL = `https://platform-slack-responder.isnan.eu/`
+   (the `responder_public_url` output). CloudFront + DNS must be deployed first so Slack's URL-verification handshake succeeds.
 2. Store the signing secret in SSM `slack.alerting.signing_secret`.
 3. Store operator Slack user IDs in SSM `slack.alerting.operators`.
 4. Bot already has `chat:write` (used to post today).
