@@ -104,19 +104,28 @@ func Summary(table, from, to string) (string, []string) {
 	sql := fmt.Sprintf(`
 SELECT count(*) AS total,
        count(DISTINCT %s) AS unique_ips,
+       count_if(%s BETWEEN '300' AND '399') AS redirects,
        count_if(%s BETWEEN '400' AND '599') AS errors
 FROM %q
-WHERE %s`, colIP, colStatus, table, partitionPredicate(from, to))
+WHERE %s`, colIP, colStatus, colStatus, table, partitionPredicate(from, to))
 	return sql, nil
 }
 
 func TopURIs(table, from, to string, limit int) (string, []string) {
+	// Three-way status split per URI so the UI can render success (2xx, green),
+	// redirect (3xx, amber) and failed (4xx–5xx, red) segments. Redirects are
+	// kept distinct from 2xx because CloudFront's redirect-to-https answers
+	// probes with 301s that never serve a file — lumping them into "ok" is
+	// misleading. sc_status is text, hence the string range comparison.
 	sql := fmt.Sprintf(`
-SELECT %s AS uri, count(*) AS hits
+SELECT %s AS uri, count(*) AS hits,
+       count_if(%s BETWEEN '200' AND '299') AS ok,
+       count_if(%s BETWEEN '300' AND '399') AS redirect,
+       count_if(%s BETWEEN '400' AND '599') AS failed
 FROM %q
 WHERE %s
 GROUP BY 1
 ORDER BY hits DESC
-LIMIT %d`, colURI, table, partitionPredicate(from, to), limit)
+LIMIT %d`, colURI, colStatus, colStatus, colStatus, table, partitionPredicate(from, to), limit)
 	return sql, nil
 }

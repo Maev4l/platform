@@ -219,10 +219,10 @@ func (a *API) summary(c *gin.Context) {
 			return nil, err
 		}
 		if len(rows) == 0 {
-			return gin.H{"total": 0, "uniqueIps": 0, "errors": 0, "errorRate": 0.0, "topUris": []gin.H{}}, nil
+			return gin.H{"total": 0, "uniqueIps": 0, "redirects": 0, "errors": 0, "errorRate": 0.0, "topUris": []gin.H{}}, nil
 		}
 		r := rows[0]
-		total, errs := atoi(r["total"]), atoi(r["errors"])
+		total, errs, redirects := atoi(r["total"]), atoi(r["errors"]), atoi(r["redirects"])
 		rate := 0.0
 		if total > 0 {
 			// errorRate is a percentage of 4xx+5xx responses out of total requests
@@ -234,9 +234,9 @@ func (a *API) summary(c *gin.Context) {
 		}
 		uris := make([]gin.H, 0, len(top))
 		for _, u := range top {
-			uris = append(uris, gin.H{"uri": u["uri"], "hits": atoi(u["hits"])})
+			uris = append(uris, gin.H{"uri": u["uri"], "hits": atoi(u["hits"]), "ok": atoi(u["ok"]), "redirect": atoi(u["redirect"]), "failed": atoi(u["failed"])})
 		}
-		return gin.H{"total": total, "uniqueIps": atoi(r["unique_ips"]), "errors": errs, "errorRate": rate, "topUris": uris}, nil
+		return gin.H{"total": total, "uniqueIps": atoi(r["unique_ips"]), "redirects": redirects, "errors": errs, "errorRate": rate, "topUris": uris}, nil
 	})
 }
 

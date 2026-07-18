@@ -17,10 +17,17 @@ export const StatusDonut = ({ summary }) => {
     // Guard against a disposed chart if the component unmounted while summary was being set
     if (!chart.current || chart.current.isDisposed()) return;
     const errors = summary.errors ?? 0;
-    const ok = (summary.total ?? 0) - errors;
+    const redirects = summary.redirects ?? 0;
+    // Green absorbs any stray non-3xx/non-error status (1xx/unknown) so the
+    // three slices always sum to total; in practice this is just the 2xx count.
+    const ok = Math.max(0, (summary.total ?? 0) - errors - redirects);
     chart.current.setOption({
       series: [{ type: 'pie', radius: ['62%', '92%'], label: { show: false }, labelLine: { show: false }, itemStyle: { borderColor: '#0f1217', borderWidth: 2 },
-        data: [{ value: ok, name: '2xx/3xx', itemStyle: { color: '#c8f135' } }, { value: errors, name: '4xx/5xx', itemStyle: { color: '#ff5a5a' } }] }],
+        data: [
+          { value: ok, name: '2xx', itemStyle: { color: '#c8f135' } },
+          { value: redirects, name: '3xx', itemStyle: { color: '#e8a13a' } },
+          { value: errors, name: '4xx/5xx', itemStyle: { color: '#ff5a5a' } },
+        ] }],
     });
   }, [summary]);
 

@@ -15,7 +15,7 @@ export const TopList = ({ source, from, to, country, summary }) => {
         .catch((err) => console.error('geo drill fetch failed', err));
     } else {
       setTitle('Top URIs');
-      setItems((summary?.topUris ?? []).map((u) => ({ label: u.uri, sub: '', n: u.hits })));
+      setItems((summary?.topUris ?? []).map((u) => ({ label: u.uri, sub: '', n: u.hits, ok: u.ok, redirect: u.redirect, failed: u.failed })));
     }
   }, [country, source, from, to, summary]);
 
@@ -27,7 +27,21 @@ export const TopList = ({ source, from, to, country, summary }) => {
         {items.map((i, idx) => (
           <div key={idx} className="px-3.5 py-2">
             <div className="flex justify-between font-mono text-[11.5px]"><span className="truncate">{i.label}</span><span className="tabular-nums text-muted-foreground">{i.n.toLocaleString()}</span></div>
-            <div className="mt-1 h-[3px] rounded bg-border overflow-hidden"><i className="block h-full rounded" style={{ width: `${(i.n / max * 100).toFixed(1)}%`, background: 'linear-gradient(90deg,#8ba31f,#c8f135)' }} /></div>
+            <div className="mt-1 h-[3px] rounded bg-border overflow-hidden">
+              {/* URIs carry ok/redirect/failed → split the filled bar into success
+                  (2xx, lime), redirect (3xx, amber) and failed (4xx–5xx, red).
+                  The callers drill-down has no status data, so fall back to the
+                  plain lime bar. */}
+              {i.failed == null ? (
+                <i className="block h-full rounded" style={{ width: `${(i.n / max * 100).toFixed(1)}%`, background: 'linear-gradient(90deg,#8ba31f,#c8f135)' }} />
+              ) : (
+                <span className="flex h-full rounded overflow-hidden" style={{ width: `${(i.n / max * 100).toFixed(1)}%` }}>
+                  <i className="block h-full" style={{ width: `${(i.ok / i.n * 100).toFixed(1)}%`, background: '#c8f135' }} />
+                  <i className="block h-full" style={{ width: `${(i.redirect / i.n * 100).toFixed(1)}%`, background: '#e8a13a' }} />
+                  <i className="block h-full" style={{ width: `${(i.failed / i.n * 100).toFixed(1)}%`, background: '#ff5a5a' }} />
+                </span>
+              )}
+            </div>
             {i.sub && <div className="font-mono text-[9.5px] text-muted-foreground">{i.sub}</div>}
           </div>
         ))}
