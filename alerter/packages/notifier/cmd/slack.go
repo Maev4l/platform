@@ -113,7 +113,15 @@ func sendAlert(alert *notifications.Message) error {
 		return nil
 	}
 	blocks := buildMessageBlocks(alert)
-	_, _, err := slackClient.PostMessage(channelId, slack.MsgOptionBlocks(blocks...))
+	// Disable unfurling: alert bodies routinely carry bare hostnames (e.g. a cert's
+	// common name) which Slack otherwise fetches and expands into a full link/media
+	// preview card, drowning the actual alert. These are ops notifications, never
+	// link shares — no unfurl is ever wanted.
+	_, _, err := slackClient.PostMessage(channelId,
+		slack.MsgOptionBlocks(blocks...),
+		slack.MsgOptionDisableLinkUnfurl(),
+		slack.MsgOptionDisableMediaUnfurl(),
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to send alert")
 		return err
