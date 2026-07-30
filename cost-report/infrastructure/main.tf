@@ -33,7 +33,7 @@ data "aws_sns_topic" "alerting" {
 }
 
 module "cost_report_function" {
-  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.6.0"
+  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.1"
   function_name = "platform-cost-report"
   zip = {
     filename = "../function/dist/cost-report.zip"
@@ -51,7 +51,7 @@ module "cost_report_function" {
 }
 
 module "weekly_schedule" {
-  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-scheduler?ref=v1.6.0"
+  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-scheduler?ref=v1.8.1"
 
   function_name = module.cost_report_function.function_name
   function_arn  = module.cost_report_function.function_arn

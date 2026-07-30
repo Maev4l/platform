@@ -4,7 +4,7 @@
 
 # --- Notifier: consumes the alerting-events topic and posts to Slack ----------
 module "alerter_function" {
-  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.0"
+  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.1"
   function_name = "platform-notifier"
   zip = {
     filename = "../notifier/dist/notifier.zip"
@@ -25,7 +25,7 @@ module "alerter_function" {
 }
 
 module "sns_trigger" {
-  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-sns?ref=v1.8.0"
+  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-sns?ref=v1.8.1"
 
   function_name = module.alerter_function.function_name
   function_arn  = module.alerter_function.function_arn
@@ -34,7 +34,7 @@ module "sns_trigger" {
 
 # --- Responder: receives Slack button clicks over a public Function URL -------
 module "responder_function" {
-  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.0"
+  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.1"
   function_name = "platform-notifier-responder"
   zip = {
     filename = "../responder/dist/responder.zip"

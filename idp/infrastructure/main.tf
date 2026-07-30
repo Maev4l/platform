@@ -49,7 +49,7 @@ locals {
 
 
 module "idp" {
-  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.6.0"
+  source        = "github.com/Maev4l/terraform-modules//modules/lambda-function?ref=v1.8.1"
   function_name = "platform-idp"
   zip = {
     filename = "../function/dist/idp.zip"
@@ -69,7 +69,7 @@ module "idp" {
 
 
 module "idp_trigger" {
-  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-cognito?ref=v1.6.0"
+  source = "github.com/Maev4l/terraform-modules//modules/lambda-trigger-cognito?ref=v1.8.1"
 
   function_name = module.idp.function_name
   function_arn  = module.idp.function_arn
