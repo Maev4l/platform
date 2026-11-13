@@ -24,6 +24,7 @@ Slack.
 | `alerter`            | Lambda + infra                | Routes `alerting-events` messages to Slack (Markdown-aware).   |
 | `cost-report`        | Lambda + infra                | Weekly AWS Cost Explorer summary posted to Slack.              |
 | `monitoring`         | Go binary + React SPA + infra | Local CloudFront access-log analytics dashboard over Athena.   |
+| `aws-emulator`       | Docker image                  | Shared local AWS Emulator image for integration tests.         |
 
 ---
 
@@ -83,6 +84,14 @@ auto-discovered from the Glue catalog. Terraform provisions the Glue tables
 (partition projection), Athena workgroup, and results bucket. See
 [`monitoring/CLAUDE.md`](monitoring/CLAUDE.md).
 
+### `aws-emulator` — local AWS for integration tests
+
+A project-agnostic Docker image of AWS Emulator (AWS's local emulator of AWS
+service APIs), tagged `aws-emulator` so every project on the machine runs the same
+image with its own container name, port and state folder. `make update` rebuilds
+only when AWS publishes a new release, and every build cleans up the image and build
+cache it replaces. See [`aws-emulator/README.md`](aws-emulator/README.md).
+
 ---
 
 ## Repository layout
@@ -95,6 +104,7 @@ platform/
 ├── alerter/           # SNS → Slack Lambda + infrastructure
 ├── cost-report/       # weekly AWS cost Lambda + infrastructure
 ├── monitoring/        # CloudFront log analytics (Go binary + web + infra)
+├── aws-emulator/      # shared AWS Emulator Docker image (integration tests)
 └── docs/              # design specs, plans, UI mockups
 ```
 
